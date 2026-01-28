@@ -72,6 +72,7 @@ public final class ConsoleUi {
     menuMode = true;
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
     try {
+      resetCursorOffset();
       renderSwipeMenu(label, options, idx, lastMenuLines == 0);
       while (true) {
         int ch = System.in.read();
@@ -147,6 +148,7 @@ public final class ConsoleUi {
           pageOptions[i - start] = options[i];
         }
         int local = idx - start;
+        resetCursorOffset();
         renderSwipeMenu(pageLabel, pageOptions, Math.max(0, Math.min(local, pageOptions.length - 1)), lastMenuLines == 0);
         int ch = System.in.read();
         if (ch == -1) return idx;
@@ -251,6 +253,7 @@ public final class ConsoleUi {
     } finally {
       setTerminalRaw(false);
       inputPrompt = null;
+      resetCursorOffset();
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
     }
     return buf.toString();
@@ -407,6 +410,10 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private void resetCursorOffset() {
+    cursorFromMenuBottom = 0;
   }
 
   private int findBackIndex(String[] options) {
