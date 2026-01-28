@@ -21,6 +21,8 @@ public final class ConsoleUi {
   private String statusBase;
   private String statusMessage;
   private String inputPrompt;
+  private int cachedCols = 80;
+  private long cachedColsAt = 0L;
   private static final String ANSI_RESET = "\033[0m";
   private static final String ANSI_BOLD = "\033[1m";
   private static final String ANSI_DIM = "\033[2m";
@@ -459,6 +461,10 @@ public final class ConsoleUi {
   }
 
   private int terminalCols() {
+    long now = System.currentTimeMillis();
+    if (now - cachedColsAt < 1000 && cachedCols > 0) {
+      return cachedCols;
+    }
     try {
       Process p = new ProcessBuilder("sh", "-c", "stty size < /dev/tty").start();
       byte[] data = p.getInputStream().readAllBytes();
@@ -466,11 +472,15 @@ public final class ConsoleUi {
       String out = new String(data).trim();
       String[] parts = out.split("\\s+");
       if (parts.length >= 2) {
-        return Integer.parseInt(parts[1]);
+        cachedCols = Integer.parseInt(parts[1]);
+        cachedColsAt = now;
+        return cachedCols;
       }
     } catch (Throwable ignored) {
     }
-    return 80;
+    cachedCols = 80;
+    cachedColsAt = now;
+    return cachedCols;
   }
 
   private void renderInputLine(String value) {
