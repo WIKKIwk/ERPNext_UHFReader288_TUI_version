@@ -120,6 +120,7 @@ scan 2000-2100 4 0
 ```
 inv start
 inv stop
+inv-once [ms]
 ```
 
 ### 5.5 Inventory Parameters
