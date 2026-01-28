@@ -1,6 +1,9 @@
 package uhf.tui;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import uhf.core.AntennaPowerInfo;
 import uhf.core.GpioStatus;
@@ -584,7 +587,7 @@ public final class Main {
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
           "Main [" + status + "]",
-          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Config/IO", "Info", "Command shell", "Quit"},
+          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Config/IO", "Info", "About", "Command shell", "Quit"},
           0
       );
       if (sel == ConsoleUi.NAV_BACK) {
@@ -598,7 +601,8 @@ public final class Main {
           case TAGOPS -> 3;
           case CONFIG -> 4;
           case INFO -> 5;
-          case SHELL -> 6;
+          case ABOUT -> 6;
+          case SHELL -> 7;
         };
       } else if (sel == ConsoleUi.NAV_FORWARD) {
         sel = ui.getLastMenuIndex();
@@ -629,6 +633,10 @@ public final class Main {
           forwardTarget = MenuId.INFO;
         }
         case 6 -> {
+          menuAbout(ui);
+          forwardTarget = MenuId.ABOUT;
+        }
+        case 7 -> {
           ui.exitMenuMode();
           ShellExit exit = commandShell(ui, ctx, registry);
           if (exit == ShellExit.QUIT) {
@@ -643,6 +651,18 @@ public final class Main {
         }
       }
     }
+  }
+
+  private static void menuAbout(ConsoleUi ui) {
+    List<String> lines = readReadmeLines();
+    if (lines.isEmpty()) {
+      ui.showLines("About", List.of(
+          "README.md not found.",
+          "Expected in current folder or parent."
+      ));
+      return;
+    }
+    ui.viewLinesPaged("About (README)", lines, 12);
   }
 
   private static void menuConnection(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
@@ -1312,7 +1332,24 @@ public final class Main {
     TAGOPS,
     CONFIG,
     INFO,
+    ABOUT,
     SHELL
+  }
+
+  private static List<String> readReadmeLines() {
+    List<Path> candidates = List.of(
+        Path.of("README.md"),
+        Path.of("./README.md"),
+        Path.of("..", "README.md")
+    );
+    for (Path p : candidates) {
+      try {
+        if (!Files.exists(p)) continue;
+        return new ArrayList<>(Files.readAllLines(p));
+      } catch (Exception ignored) {
+      }
+    }
+    return List.of();
   }
 
   private record RegionOption(String label, int band, double startMhz, double stepMhz, int count) {

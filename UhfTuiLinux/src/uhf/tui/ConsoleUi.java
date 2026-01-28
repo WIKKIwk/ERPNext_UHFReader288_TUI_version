@@ -274,6 +274,70 @@ public final class ConsoleUi {
     renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
   }
 
+  public void viewLinesPaged(String title, List<String> lines, int pageSize) {
+    if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
+      println(title);
+      if (lines != null) {
+        for (String l : lines) println(l);
+      }
+      return;
+    }
+    if (lines == null) lines = List.of();
+    int size = Math.max(4, pageSize);
+    int start = 0;
+    if (!setTerminalRaw(true)) {
+      showLines(title, lines);
+      return;
+    }
+    try {
+      while (true) {
+        renderLinesPage(title, lines, start, size);
+        int ch = System.in.read();
+        if (ch == -1) break;
+        if (ch == 27) { // ESC or arrows
+          int ch1 = System.in.read();
+          if (ch1 == -1) break;
+          if (ch1 == '[') {
+            int ch2 = System.in.read();
+            if (ch2 == 'A') { // up
+              start = Math.max(0, start - 1);
+              continue;
+            }
+            if (ch2 == 'B') { // down
+              int maxStart = Math.max(0, lines.size() - size);
+              start = Math.min(maxStart, start + 1);
+              continue;
+            }
+            if (ch2 == 'D') { // left
+              break;
+            }
+            if (ch2 == 'C') { // right
+              continue;
+            }
+          } else {
+            break;
+          }
+        }
+        if (ch == 'j' || ch == 'J') {
+          int maxStart = Math.max(0, lines.size() - size);
+          start = Math.min(maxStart, start + 1);
+          continue;
+        }
+        if (ch == 'k' || ch == 'K') {
+          start = Math.max(0, start - 1);
+          continue;
+        }
+        if (ch == '\r' || ch == '\n') {
+          break;
+        }
+      }
+    } catch (Throwable ignored) {
+    } finally {
+      setTerminalRaw(false);
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+  }
+
   public void setStatus(String message) {
     setStatusMessage(message);
   }
@@ -550,6 +614,60 @@ public final class ConsoleUi {
     int count = lines == null ? 0 : lines.size();
     lastMenuLines = 6 + count;
     cursorFromMenuBottom = 0;
+  }
+
+  private void renderLinesPage(String title, List<String> lines, int start, int size) {
+    MenuStyle style = style();
+    String hint = style.fancy ? "↑/↓ scroll · Esc back" : "Up/Down scroll, Esc back";
+    String h = style.unicode ? "─" : "-";
+    String v = style.unicode ? "│" : "|";
+    String tl = style.unicode ? "┌" : "+";
+    String tr = style.unicode ? "┐" : "+";
+    String bl = style.unicode ? "└" : "+";
+    String br = style.unicode ? "┘" : "+";
+    String jm = style.unicode ? "├" : "+";
+    String jmr = style.unicode ? "┤" : "+";
+
+    int width = title == null ? 0 : title.length();
+    int end = Math.min(lines.size(), start + size);
+    for (int i = start; i < end; i++) {
+      String l = sanitizeLine(lines.get(i));
+      if (l.length() > width) width = l.length();
+    }
+    if (hint.length() > width) width = hint.length();
+    int minWidth = minContentWidth();
+    if (minWidth > 0 && width < minWidth) width = minWidth;
+    int maxWidth = maxContentWidth();
+    if (maxWidth > 0 && width > maxWidth) width = maxWidth;
+
+    if (lastMenuLines > 0) {
+      int moveUp = lastMenuLines - cursorFromMenuBottom;
+      if (moveUp > 0) moveCursorUp(moveUp);
+      clearBelow();
+    }
+    System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(title == null ? "" : title, width), style.bold) + " " + v) + "\n");
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    for (int i = 0; i < size; i++) {
+      int idx = start + i;
+      String line = idx < lines.size() ? sanitizeLine(lines.get(idx)) : "";
+      System.out.print(clearLine(v + " " + padRight(line, width) + " " + v) + "\n");
+    }
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(hint, width), style.dim) + " " + v) + "\n");
+    System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
+    System.out.flush();
+    lastMenuLines = 6 + size;
+    cursorFromMenuBottom = 0;
+  }
+
+  private String sanitizeLine(String s) {
+    if (s == null) return "";
+    String out = s.replace("\r", "");
+    if (out.indexOf('\t') >= 0) {
+      out = out.replace("\t", "  ");
+    }
+    return out;
   }
 
   private void waitForEnter() {
