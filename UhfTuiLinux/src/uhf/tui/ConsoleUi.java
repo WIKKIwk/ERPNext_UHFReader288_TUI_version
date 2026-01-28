@@ -265,6 +265,8 @@ public final class ConsoleUi {
     System.out.flush();
     lastMenuLines = 8 + options.length;
     cursorFromMenuBottom = 0;
+    System.out.print("\033[2K");
+    System.out.flush();
   }
 
   private void moveCursorUp(int lines) {
