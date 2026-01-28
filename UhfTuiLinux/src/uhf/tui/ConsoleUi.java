@@ -16,7 +16,8 @@ public final class ConsoleUi {
   private int lastMenuIndex = 0;
   private int lastMenuWidth = 0;
   private int cursorFromMenuBottom = 0;
-  private String statusLine;
+  private String statusBase;
+  private String statusMessage;
   private String inputPrompt;
   private static final String ANSI_RESET = "\033[0m";
   private static final String ANSI_BOLD = "\033[1m";
@@ -25,7 +26,7 @@ public final class ConsoleUi {
 
   public void println(String s) {
     if (menuMode && supportsAnsi() && lastMenuOptions != null) {
-      setStatus(s);
+      setStatusMessage(s);
       return;
     }
     resetMenuState();
@@ -192,7 +193,18 @@ public final class ConsoleUi {
   }
 
   public void setStatus(String message) {
-    statusLine = message == null ? "" : message;
+    setStatusMessage(message);
+  }
+
+  public void setStatusBase(String message) {
+    statusBase = message == null ? "" : message;
+    if (menuMode && supportsAnsi() && lastMenuOptions != null) {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+  }
+
+  public void setStatusMessage(String message) {
+    statusMessage = message == null ? "" : message;
     if (menuMode && supportsAnsi() && lastMenuOptions != null) {
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
     }
@@ -206,7 +218,7 @@ public final class ConsoleUi {
   private void renderSwipeMenu(String label, String[] options, int idx, boolean first) {
     MenuStyle style = style();
     String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
-    String status = statusLine == null ? "" : statusLine;
+    String status = combineStatus();
     String input = inputPrompt == null ? "" : inputPrompt;
     int width = Math.max(label.length(), hint.length());
     if (!status.isEmpty()) width = Math.max(width, status.length());
@@ -264,7 +276,8 @@ public final class ConsoleUi {
     lastMenuLines = 0;
     lastMenuWidth = 0;
     cursorFromMenuBottom = 0;
-    statusLine = null;
+    statusBase = null;
+    statusMessage = null;
     inputPrompt = null;
     lastMenuLabel = null;
     lastMenuOptions = null;
@@ -313,6 +326,14 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private String combineStatus() {
+    String base = statusBase == null ? "" : statusBase;
+    String msg = statusMessage == null ? "" : statusMessage;
+    if (base.isEmpty()) return msg;
+    if (msg.isEmpty()) return base;
+    return base + " | " + msg;
   }
 
   private int maxContentWidth() {

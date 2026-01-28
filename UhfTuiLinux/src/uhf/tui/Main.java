@@ -403,6 +403,10 @@ public final class Main {
             ctx.ui().println("Usage: inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]");
             return;
           }
+          if (!ctx.reader().isConnected()) {
+            ctx.ui().println("Not connected.");
+            return;
+          }
           String sub = args.get(1).toLowerCase();
           if (sub.equals("get")) {
             InventoryParams p = ctx.reader().getInventoryParams();
@@ -452,6 +456,7 @@ public final class Main {
   private static void menuLoop(ConsoleUi ui, ReaderClient reader, CommandRegistry registry) {
     CommandContext ctx = new CommandContext(reader, ui);
     while (true) {
+      updateStatus(ui, reader);
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
           "Main [" + status + "]",
@@ -483,6 +488,7 @@ public final class Main {
 
   private static void menuConnection(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Connection", new String[]{"Connect", "Disconnect", "Back"}, 0);
       if (sel == 2) return;
       if (sel == 1) {
@@ -503,6 +509,7 @@ public final class Main {
 
   private static void menuScan(ConsoleUi ui, CommandContext ctx) {
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Scan", new String[]{"LAN auto-scan", "USB auto-scan", "Back"}, 0);
       if (sel == 2) return;
       int readerType = askInt(ui, "ReaderType (4/16)", 4);
@@ -551,6 +558,7 @@ public final class Main {
 
   private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Once (timed)", "Params (view)", "Params (set)", "Back"}, 0);
       if (sel == 5) return;
       if (sel == 0) registry.execute(List.of("inv", "start"), ctx);
@@ -561,11 +569,18 @@ public final class Main {
         pause(ui);
       }
       if (sel == 3) {
+        if (!ctx.reader().isConnected()) {
+          ui.setStatusMessage("Not connected.");
+          continue;
+        }
         InventoryParams p = ctx.reader().getInventoryParams();
         printInventoryParams(ui, p);
-        pause(ui);
       }
       if (sel == 4) {
+        if (!ctx.reader().isConnected()) {
+          ui.setStatusMessage("Not connected.");
+          continue;
+        }
         InventoryParams current = ctx.reader().getInventoryParams();
         InventoryParams p = promptInventoryParams(ui, current);
         Result r = ctx.reader().setInventoryParams(p);
@@ -581,6 +596,7 @@ public final class Main {
         "Write EPC ID", "Write EPC by TID", "Lock", "Kill", "Back"
     };
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Tag Ops", options, 0);
       if (sel == 8) return;
       switch (sel) {
@@ -630,6 +646,7 @@ public final class Main {
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {"Power", "Region", "Beep", "GPIO Get", "GPIO Set", "Relay", "Antenna", "Back"};
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == 7) return;
       switch (sel) {
@@ -651,6 +668,7 @@ public final class Main {
 
   private static void menuInfo(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
+      updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Info", new String[]{"Reader info", "Serial", "Back"}, 0);
       if (sel == 2) return;
       if (sel == 0) registry.execute(List.of("info"), ctx);
@@ -747,7 +765,11 @@ public final class Main {
 
   private static void printInventoryParams(ConsoleUi ui, InventoryParams p) {
     if (!p.result().ok()) {
-      ui.println("GetInventoryParameter failed: " + p.result().code());
+      if (p.result().code() == 0x36) {
+        ui.showLines("Not connected", List.of("Please connect first."));
+      } else {
+        ui.showLines("GetInventoryParameter failed", List.of("code=" + p.result().code()));
+      }
       return;
     }
     ui.showLines("Inventory Params", List.of(
@@ -761,6 +783,10 @@ public final class Main {
 
   private static void pause(ConsoleUi ui) {
     ui.readLineInMenu("Press Enter to continue...");
+  }
+
+  private static void updateStatus(ConsoleUi ui, ReaderClient reader) {
+    ui.setStatusBase("Status: " + (reader.isConnected() ? "connected" : "disconnected"));
   }
 
   private enum ShellExit {
