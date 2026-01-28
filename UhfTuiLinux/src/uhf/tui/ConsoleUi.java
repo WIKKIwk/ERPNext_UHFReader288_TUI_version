@@ -227,6 +227,8 @@ public final class ConsoleUi {
       int len = (style.fancy ? 2 : 2) + opt.length();
       if (len > width) width = len;
     }
+    int minWidth = minContentWidth();
+    if (minWidth > 0 && width < minWidth) width = minWidth;
     int maxWidth = maxContentWidth();
     if (maxWidth > 0 && width > maxWidth) width = maxWidth;
     String h = style.unicode ? "─" : "-";
@@ -343,6 +345,15 @@ public final class ConsoleUi {
     if (cols <= 0) return 0;
     int max = cols - 4;
     return Math.max(20, max);
+  }
+
+  private int minContentWidth() {
+    int cols = terminalCols();
+    if (cols <= 0) return 0;
+    int min = Math.max(50, cols * 70 / 100);
+    int max = maxContentWidth();
+    if (max > 0 && min > max) return max;
+    return min;
   }
 
   private int terminalCols() {
