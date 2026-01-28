@@ -683,7 +683,6 @@ public final class Main {
       if (log == ConsoleUi.NAV_BACK) return;
       List<Integer> ports = choosePorts(ui);
       if (ports == null) return;
-      String prefix = chooseSubnetPrefix(ui);
       List<String> prefixes;
       if (sel == 1) {
         prefixes = NetworkScanner.detectUsbPrefixes();
@@ -696,7 +695,14 @@ public final class Main {
           prefixes = NetworkScanner.detectPrefixes();
         }
       } else {
-        prefixes = (prefix == null || prefix.isBlank()) ? NetworkScanner.detectPrefixes() : List.of(prefix.trim());
+        List<String> detected = NetworkScanner.detectPrefixes();
+        if (detected.isEmpty()) {
+          ui.setStatusMessage("No LAN prefixes found.");
+          continue;
+        }
+        PrefixChoice choice = chooseSubnetPrefix(ui, detected);
+        if (choice.cancelled()) return;
+        prefixes = choice.prefix() == null ? detected : List.of(choice.prefix());
       }
       if (prefixes.isEmpty()) {
         ui.println("No LAN prefixes found.");
@@ -1070,10 +1076,21 @@ public final class Main {
     };
   }
 
-  private static String chooseSubnetPrefix(ConsoleUi ui) {
-    int mode = ui.selectOption("Subnet", new String[]{"auto", "custom"}, 0);
-    if (mode == 0) return null;
-    return ui.readLineInMenu("Subnet prefix (e.g. 192.168.1): ");
+  private static PrefixChoice chooseSubnetPrefix(ConsoleUi ui, List<String> prefixes) {
+    if (prefixes == null || prefixes.isEmpty()) {
+      ui.setStatusMessage("No LAN prefixes found.");
+      return new PrefixChoice(null, true);
+    }
+    String[] options = new String[prefixes.size() + 1];
+    options[0] = "Auto (all detected)";
+    for (int i = 0; i < prefixes.size(); i++) {
+      options[i + 1] = prefixes.get(i);
+    }
+    int sel = ui.selectOption("Subnet", options, 0);
+    if (sel == ConsoleUi.NAV_BACK) return new PrefixChoice(null, true);
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel <= 0) return new PrefixChoice(null, false);
+    return new PrefixChoice(prefixes.get(sel - 1), false);
   }
 
   private static int selectMem(ConsoleUi ui) {
@@ -1203,6 +1220,9 @@ public final class Main {
 
   private static void pause(ConsoleUi ui) {
     ui.readLineInMenu("Press Enter to continue...");
+  }
+
+  private record PrefixChoice(String prefix, boolean cancelled) {
   }
 
   private static int selectReaderType(ConsoleUi ui, int def) {
