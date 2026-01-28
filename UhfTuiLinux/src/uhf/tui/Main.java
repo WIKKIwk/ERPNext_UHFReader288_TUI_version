@@ -699,13 +699,13 @@ public final class Main {
     int mode = ui.selectOption("Ports", new String[]{"auto", "auto+", "custom"}, 0);
     if (mode == 0) return NetworkScanner.defaultPorts();
     if (mode == 1) return NetworkScanner.widePorts();
-    return NetworkScanner.parsePorts(ui.readLine("Enter ports (comma/range): "), true);
+    return NetworkScanner.parsePorts(ui.readLineInMenu("Enter ports (comma/range): "), true);
   }
 
   private static String chooseSubnetPrefix(ConsoleUi ui) {
     int mode = ui.selectOption("Subnet", new String[]{"auto", "custom"}, 0);
     if (mode == 0) return null;
-    return ui.readLine("Subnet prefix (e.g. 192.168.1): ");
+    return ui.readLineInMenu("Subnet prefix (e.g. 192.168.1): ");
   }
 
   private static int selectMem(ConsoleUi ui) {
