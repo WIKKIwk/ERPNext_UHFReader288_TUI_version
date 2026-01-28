@@ -224,6 +224,37 @@ java -cp UhfTuiLinux/out:lib/CReader.jar UhfTuiLinux
 
 ---
 
+## 8.1) Standalone Bundle (Recommended for Sharing)
+
+Create a **self‑contained** folder you can send to others (no SDK/JDK setup needed):
+
+```bash
+./UhfTuiLinux/bundle.sh
+```
+
+Output:
+
+```
+UhfTuiLinux/dist/
+  start.sh
+  app/        (compiled classes)
+  lib/CReader.jar
+  jre/        (bundled runtime)
+```
+
+Run on another machine:
+
+```bash
+./start.sh
+```
+
+**Notes**
+- This bundle is **Linux‑only**.
+- Size is larger because it includes a local Java runtime.
+- `CReader.jar` is vendor‑provided and may be **proprietary**; share responsibly.
+
+---
+
 ## 9) Security & Operations Guidance
 
 - Place `CReader.jar` in `lib/` but **do not commit vendor binaries** to public Git.
