@@ -186,7 +186,7 @@ public final class ConsoleUi {
       return;
     }
     renderMessageBox(title, lines, "Press Enter to return");
-    readLineInMenu("");
+    waitForEnter();
     renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
   }
 
@@ -359,6 +359,24 @@ public final class ConsoleUi {
     System.out.print(clearLine(v + " " + applyStyle(padRight(footer == null ? "" : footer, width), style.dim) + " " + v) + "\n");
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
+  }
+
+  private void waitForEnter() {
+    if (!setTerminalRaw(true)) {
+      readLine();
+      return;
+    }
+    try {
+      while (true) {
+        int ch = System.in.read();
+        if (ch == -1) break;
+        if (ch == '\r' || ch == '\n') break;
+        if (ch == 27) break;
+      }
+    } catch (Throwable ignored) {
+    } finally {
+      setTerminalRaw(false);
+    }
   }
 
   private int selectOptionLine(String label, String[] options, int defaultIndex) {
