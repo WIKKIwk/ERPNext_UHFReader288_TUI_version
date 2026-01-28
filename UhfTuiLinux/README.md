@@ -272,3 +272,10 @@ java -cp UhfTuiLinux/out:lib/CReader.jar uhf.tui.Main
 
 This project relies on vendor SDK behavior.  
 For low‑level protocol details or USB‑serial support, request an official Linux `.so` SDK from the vendor.
+
+---
+
+## 18) License
+
+This project is licensed under the **Apache License 2.0**.  
+See `LICENSE` for full text.
