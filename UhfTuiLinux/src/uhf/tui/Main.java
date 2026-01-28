@@ -6,6 +6,7 @@ import uhf.core.GpioStatus;
 import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
+import uhf.core.WritePowerInfo;
 import uhf.sdk.ReaderClient;
 
 public final class Main {
@@ -129,6 +130,46 @@ public final class Main {
       }
       Result r = ctx.reader().setPower(p);
       ctx.ui().println(r.ok() ? "Power set: " + p : "SetRfPower failed: " + r.code());
+    });
+
+    registry.register("wpower", "wpower get | set <0-33> [mode]", (args, ctx) -> {
+      if (args.size() < 2) {
+        ctx.ui().println("Usage: wpower get | set <0-33> [mode]");
+        ctx.ui().println("mode: 0=normal, 1=high (default=0)");
+        return;
+      }
+      if (!ctx.reader().isConnected()) {
+        ctx.ui().println("Not connected.");
+        return;
+      }
+      String sub = args.get(1).toLowerCase();
+      if (sub.equals("get")) {
+        WritePowerInfo info = ctx.reader().getWritePower();
+        if (!info.result().ok()) {
+          ctx.ui().println("GetWritePower failed: " + info.result().code());
+        } else {
+          ctx.ui().println("WritePower=" + info.power() + " dBm mode=" + (info.highMode() ? "high" : "normal"));
+        }
+        return;
+      }
+      if (sub.equals("set")) {
+        if (args.size() < 3) {
+          ctx.ui().println("Usage: wpower set <0-33> [mode]");
+          return;
+        }
+        int p = parseInt(args.get(2), -1);
+        if (p < 0 || p > 33) {
+          ctx.ui().println("Invalid power.");
+          return;
+        }
+        int mode = args.size() >= 4 ? parseInt(args.get(3), 0) : 0;
+        boolean high = mode == 1;
+        Result r = ctx.reader().setWritePower(p, high);
+        ctx.ui().println(r.ok() ? "Write power set: " + p + " (" + (high ? "high" : "normal") + ")"
+            : "SetWritePower failed: " + r.code());
+        return;
+      }
+      ctx.ui().println("Usage: wpower get | set <0-33> [mode]");
     });
 
     registry.register("region", "region <band> <maxFreq> <minFreq>", (args, ctx) -> {
@@ -688,26 +729,21 @@ public final class Main {
   }
 
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
-    String[] options = {"Power", "Region", "Beep", "GPIO Get", "GPIO Set", "Relay", "Antenna", "Back"};
+    String[] options = {"RF Power", "Write Power", "Region", "Beep", "GPIO Get", "GPIO Set", "Relay", "Antenna", "Back"};
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 7) return;
+      if (sel == 8) return;
       switch (sel) {
         case 0 -> {
-          String[] items = new String[34];
-          for (int i = 0; i <= 33; i++) {
-            items[i] = i + " dBm";
-          }
-          int p = ui.selectOptionPaged("Power", items, 30, 12);
+          int p = selectPowerValue(ui, "RF Power", 30);
           if (p == ConsoleUi.NAV_BACK) return;
-          if (p == ConsoleUi.NAV_FORWARD) p = ui.getLastMenuIndex();
-          if (p < 0) p = 30;
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
-        case 1 -> {
+        case 1 -> menuWritePower(ui, ctx, registry);
+        case 2 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
           registry.execute(List.of("region",
@@ -715,20 +751,45 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 2 -> {
+        case 3 -> {
           int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
           if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
           int val = b == 0 ? 1 : 0;
           registry.execute(List.of("beep", String.valueOf(val)), ctx);
         }
-        case 3 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 4 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
-        case 5 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
-        case 6 -> registry.execute(List.of("antenna",
+        case 4 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 5 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
+        case 6 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 7 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, "Arg1", 0)),
             String.valueOf(askInt(ui, "Arg2", 0))), ctx);
       }
+    }
+  }
+
+  private static void menuWritePower(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    String[] options = {"Set (normal)", "Set (high)", "Get", "Back"};
+    while (true) {
+      updateStatus(ui, ctx.reader());
+      int sel = ui.selectOption("Write Power", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 3) return;
+      if (!ctx.reader().isConnected()) {
+        ui.setStatusMessage("Not connected.");
+        continue;
+      }
+      if (sel == 2) {
+        registry.execute(List.of("wpower", "get"), ctx);
+        continue;
+      }
+      int def = 30;
+      WritePowerInfo info = ctx.reader().getWritePower();
+      if (info.result().ok()) def = info.power();
+      int p = selectPowerValue(ui, "Write Power", def);
+      if (p == ConsoleUi.NAV_BACK) continue;
+      registry.execute(List.of("wpower", "set", String.valueOf(p), sel == 1 ? "1" : "0"), ctx);
     }
   }
 
@@ -913,6 +974,19 @@ public final class Main {
 
   private static void pause(ConsoleUi ui) {
     ui.readLineInMenu("Press Enter to continue...");
+  }
+
+  private static int selectPowerValue(ConsoleUi ui, String label, int def) {
+    String[] items = new String[34];
+    for (int i = 0; i <= 33; i++) {
+      items[i] = i + " dBm";
+    }
+    int safeDef = Math.max(0, Math.min(def, 33));
+    int sel = ui.selectOptionPaged(label, items, safeDef, 12);
+    if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel < 0) sel = safeDef;
+    return sel;
   }
 
   private static void updateStatus(ConsoleUi ui, ReaderClient reader) {

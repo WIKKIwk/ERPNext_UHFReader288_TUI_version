@@ -10,6 +10,7 @@ import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.core.TagRead;
+import uhf.core.WritePowerInfo;
 
 public final class ReaderClient {
   private CReader reader;
@@ -170,6 +171,25 @@ public final class ReaderClient {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetAntenna(arg1, arg2);
     return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  public Result setWritePower(int powerDbm, boolean highMode) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int value = powerDbm & 0x3F;
+    if (highMode) value |= 0x80;
+    int rc = reader.SetWritePower((byte) value);
+    return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  public WritePowerInfo getWritePower() {
+    if (!connected || reader == null) return new WritePowerInfo(Result.fail(0x36), 0, false);
+    byte[] out = new byte[1];
+    int rc = reader.GetWritePower(out);
+    Result r = rc == 0 ? Result.success() : Result.fail(rc);
+    int raw = out[0] & 0xFF;
+    boolean high = (raw & 0x80) != 0;
+    int power = raw & 0x3F;
+    return new WritePowerInfo(r, power, high);
   }
 
   public InventoryParams getInventoryParams() {
