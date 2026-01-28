@@ -682,6 +682,7 @@ public final class Main {
       int log = selectLog(ui, 0);
       if (log == ConsoleUi.NAV_BACK) return;
       List<Integer> ports = choosePorts(ui);
+      if (ports == null) return;
       String prefix = chooseSubnetPrefix(ui);
       List<String> prefixes;
       if (sel == 1) {
@@ -1050,10 +1051,23 @@ public final class Main {
   }
 
   private static List<Integer> choosePorts(ConsoleUi ui) {
-    int mode = ui.selectOption("Ports", new String[]{"auto", "auto+", "custom"}, 0);
-    if (mode == 0) return NetworkScanner.defaultPorts();
-    if (mode == 1) return NetworkScanner.widePorts();
-    return NetworkScanner.parsePorts(ui.readLineInMenu("Enter ports (comma/range): "), true);
+    String[] options = {
+        "auto (default)",
+        "auto+ (wide)",
+        "27011 only",
+        "27011 + 2022",
+        "2022 only"
+    };
+    int mode = ui.selectOption("Ports", options, 0);
+    if (mode == ConsoleUi.NAV_BACK) return null;
+    if (mode == ConsoleUi.NAV_FORWARD) mode = ui.getLastMenuIndex();
+    return switch (mode) {
+      case 1 -> NetworkScanner.widePorts();
+      case 2 -> List.of(27011);
+      case 3 -> List.of(27011, 2022);
+      case 4 -> List.of(2022);
+      default -> NetworkScanner.defaultPorts();
+    };
   }
 
   private static String chooseSubnetPrefix(ConsoleUi ui) {
