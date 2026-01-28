@@ -10,12 +10,22 @@ public final class ConsoleUi {
   private final Object lock = new Object();
   private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
   private int lastMenuLines = 0;
+  private boolean menuMode = false;
+  private String lastMenuLabel;
+  private String[] lastMenuOptions;
+  private int lastMenuIndex = 0;
+  private String statusLine;
+  private String inputPrompt;
   private static final String ANSI_RESET = "\033[0m";
   private static final String ANSI_BOLD = "\033[1m";
   private static final String ANSI_DIM = "\033[2m";
   private static final String ANSI_REVERSE = "\033[7m";
 
   public void println(String s) {
+    if (menuMode && supportsAnsi() && lastMenuOptions != null) {
+      setStatus(s);
+      return;
+    }
     resetMenuState();
     synchronized (lock) {
       System.out.println(s);
@@ -51,8 +61,10 @@ public final class ConsoleUi {
 
   public int selectOption(String label, String[] options, int defaultIndex) {
     if (!setTerminalRaw(true)) {
+      menuMode = false;
       return selectOptionLine(label, options, defaultIndex);
     }
+    menuMode = true;
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
     try {
       renderSwipeMenu(label, options, idx, lastMenuLines == 0);
@@ -121,10 +133,58 @@ public final class ConsoleUi {
     return "YES".equalsIgnoreCase(line.trim());
   }
 
+  public String readLineInMenu(String prompt) {
+    if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
+      return readLine(prompt);
+    }
+    inputPrompt = prompt == null ? "" : prompt;
+    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    moveCursorUp(3);
+    System.out.print("\r");
+    System.out.print("\033[2C");
+    if (inputPrompt != null) {
+      System.out.print(inputPrompt);
+    }
+    System.out.flush();
+    String line = readLine();
+    inputPrompt = null;
+    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    return line;
+  }
+
+  public void showLines(String title, List<String> lines) {
+    if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
+      println(title);
+      if (lines != null) {
+        for (String l : lines) println(l);
+      }
+      return;
+    }
+    renderMessageBox(title, lines, "Press Enter to return");
+    readLine();
+    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+  }
+
+  public void setStatus(String message) {
+    statusLine = message == null ? "" : message;
+    if (menuMode && supportsAnsi() && lastMenuOptions != null) {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+  }
+
+  public void exitMenuMode() {
+    menuMode = false;
+    resetMenuState();
+  }
+
   private void renderSwipeMenu(String label, String[] options, int idx, boolean first) {
     MenuStyle style = style();
     String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
+    String status = statusLine == null ? "" : statusLine;
+    String input = inputPrompt == null ? "" : inputPrompt;
     int width = Math.max(label.length(), hint.length());
+    if (!status.isEmpty()) width = Math.max(width, status.length());
+    if (!input.isEmpty()) width = Math.max(width, input.length());
     for (String opt : options) {
       int len = (style.fancy ? 2 : 2) + opt.length();
       if (len > width) width = len;
@@ -142,6 +202,10 @@ public final class ConsoleUi {
       moveCursorUp(lastMenuLines);
     }
 
+    lastMenuLabel = label;
+    lastMenuOptions = options;
+    lastMenuIndex = idx;
+
     System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
     System.out.print(clearLine(v + " " + applyStyle(padRight(label, width), style.bold) + " " + v) + "\n");
     System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
@@ -152,10 +216,12 @@ public final class ConsoleUi {
       System.out.print(clearLine(v + " " + line + " " + v) + "\n");
     }
     System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(status, width), style.dim) + " " + v) + "\n");
+    System.out.print(clearLine(v + " " + padRight(input, width) + " " + v) + "\n");
     System.out.print(clearLine(v + " " + applyStyle(padRight(hint, width), style.dim) + " " + v) + "\n");
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
-    lastMenuLines = 6 + options.length;
+    lastMenuLines = 8 + options.length;
   }
 
   private void moveCursorUp(int lines) {
@@ -165,6 +231,10 @@ public final class ConsoleUi {
 
   private void resetMenuState() {
     lastMenuLines = 0;
+    statusLine = null;
+    inputPrompt = null;
+    lastMenuLabel = null;
+    lastMenuOptions = null;
   }
 
   private String clearLine(String s) {
@@ -208,6 +278,42 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private void renderMessageBox(String title, List<String> lines, String footer) {
+    MenuStyle style = style();
+    String h = style.unicode ? "─" : "-";
+    String v = style.unicode ? "│" : "|";
+    String tl = style.unicode ? "┌" : "+";
+    String tr = style.unicode ? "┐" : "+";
+    String bl = style.unicode ? "└" : "+";
+    String br = style.unicode ? "┘" : "+";
+    String jm = style.unicode ? "├" : "+";
+    String jmr = style.unicode ? "┤" : "+";
+
+    int width = title == null ? 0 : title.length();
+    if (lines != null) {
+      for (String l : lines) {
+        if (l != null && l.length() > width) width = l.length();
+      }
+    }
+    if (footer != null && footer.length() > width) width = footer.length();
+
+    if (lastMenuLines > 0) {
+      moveCursorUp(lastMenuLines);
+    }
+    System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(title == null ? "" : title, width), style.bold) + " " + v) + "\n");
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    if (lines != null) {
+      for (String l : lines) {
+        System.out.print(clearLine(v + " " + padRight(l == null ? "" : l, width) + " " + v) + "\n");
+      }
+    }
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(footer == null ? "" : footer, width), style.dim) + " " + v) + "\n");
+    System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
+    System.out.flush();
   }
 
   private int selectOptionLine(String label, String[] options, int defaultIndex) {

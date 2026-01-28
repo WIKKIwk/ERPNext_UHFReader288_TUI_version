@@ -466,6 +466,7 @@ public final class Main {
         case 4 -> menuConfig(ui, ctx, registry);
         case 5 -> menuInfo(ui, ctx, registry);
         case 6 -> {
+          ui.exitMenuMode();
           ShellExit exit = commandShell(ui, ctx, registry);
           if (exit == ShellExit.QUIT) {
             reader.disconnect();
@@ -679,19 +680,19 @@ public final class Main {
   }
 
   private static int askInt(ConsoleUi ui, String label, int def) {
-    String line = ui.readLine(label + " [" + def + "]: ");
+    String line = ui.readLineInMenu(label + " [" + def + "]: ");
     if (line == null || line.isBlank()) return def;
     return parseInt(line, def);
   }
 
   private static String askString(ConsoleUi ui, String label, String def) {
-    String line = ui.readLine(label + " [" + def + "]: ");
+    String line = ui.readLineInMenu(label + " [" + def + "]: ");
     if (line == null || line.isBlank()) return def;
     return line;
   }
 
   private static String askString(ConsoleUi ui, String label) {
-    return ui.readLine(label + ": ");
+    return ui.readLineInMenu(label + ": ");
   }
 
   private static List<Integer> choosePorts(ConsoleUi ui) {
@@ -747,16 +748,17 @@ public final class Main {
       ui.println("GetInventoryParameter failed: " + p.result().code());
       return;
     }
-    ui.println("Inventory Params:");
-    ui.println("  address=" + p.address() + " session=" + p.session() + " q=" + p.qValue() + " scanTime=" + p.scanTime()
-        + " antenna=" + p.antenna());
-    ui.println("  readType=" + p.readType() + " readMem=" + p.readMem() + " readPtr=" + p.readPtr()
-        + " readLen=" + p.readLength());
-    ui.println("  tidPtr=" + p.tidPtr() + " tidLen=" + p.tidLen() + " password=" + p.password());
+    ui.showLines("Inventory Params", List.of(
+        "address=" + p.address() + " session=" + p.session() + " q=" + p.qValue() + " scanTime=" + p.scanTime()
+            + " antenna=" + p.antenna(),
+        "readType=" + p.readType() + " readMem=" + p.readMem() + " readPtr=" + p.readPtr()
+            + " readLen=" + p.readLength(),
+        "tidPtr=" + p.tidPtr() + " tidLen=" + p.tidLen() + " password=" + p.password()
+    ));
   }
 
   private static void pause(ConsoleUi ui) {
-    ui.readLine("Press Enter to continue...");
+    ui.readLineInMenu("Press Enter to continue...");
   }
 
   private enum ShellExit {
