@@ -117,10 +117,32 @@ inv stop
 
 ```
 info
+serial
 power <0-33>
+region <band> <maxFreq> <minFreq>
+beep <0|1>
+gpio get
+gpio set <mask>
+relay <value>
+antenna <arg1> <arg2>
 disconnect
 quit
 ```
+
+### 5.5 Tag Read/Write (C1G2)
+
+```
+read-epc <epc> <mem> <wordPtr> <num> <password>
+read-tid <tid> <mem> <wordPtr> <num> <password>
+write-epc <epc> <mem> <wordPtr> <password> <data>
+write-tid <tid> <mem> <wordPtr> <password> <data>
+write-epc-id <epc> <password>
+write-epc-by-tid <tid> <epc> <password>
+lock <epc> <select> <protect> <password>
+kill <epc> <password>
+```
+
+**Safety:** write/lock/kill commands require confirmation (`Type YES to continue`).
 
 ---
 
@@ -206,4 +228,3 @@ java -cp UhfTuiLinux/out:lib/CReader.jar UhfTuiLinux
 
 `CReader.jar` is vendor‑provided and may be proprietary.  
 Make sure to comply with vendor licensing terms.
-

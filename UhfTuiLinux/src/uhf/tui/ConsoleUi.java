@@ -110,6 +110,12 @@ public final class ConsoleUi {
     }
   }
 
+  public boolean confirm(String message) {
+    String line = readLine(message + " Type YES to continue: ");
+    if (line == null) return false;
+    return "YES".equalsIgnoreCase(line.trim());
+  }
+
   private void renderSwipeLine(String label, String[] options, int idx) {
     String text = label + " [" + options[idx] + "] (↑/↓ + Enter)";
     System.out.print("\r\033[2K" + text);
@@ -157,4 +163,3 @@ public final class ConsoleUi {
     }
   }
 }
-

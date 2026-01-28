@@ -243,6 +243,143 @@ public final class Main {
       ctx.ui().println(r.ok() ? "Antenna set." : "SetAntenna failed: " + r.code());
     });
 
+    registry.register("read-epc", "read-epc <epc> <mem> <wordPtr> <num> <password>", (args, ctx) -> {
+      if (args.size() < 6) {
+        ctx.ui().println("Usage: read-epc <epc> <mem> <wordPtr> <num> <password>");
+        return;
+      }
+      String epc = args.get(1);
+      int mem = parseInt(args.get(2), -1);
+      int wordPtr = parseInt(args.get(3), -1);
+      int num = parseInt(args.get(4), -1);
+      String pwd = args.get(5);
+      if (mem < 0 || wordPtr < 0 || num <= 0) {
+        ctx.ui().println("Invalid parameters.");
+        return;
+      }
+      String data = ctx.reader().readDataByEpc(epc, mem, wordPtr, num, pwd);
+      if (data == null) {
+        ctx.ui().println("Read failed.");
+      } else {
+        ctx.ui().println("Data: " + data);
+      }
+    });
+
+    registry.register("read-tid", "read-tid <tid> <mem> <wordPtr> <num> <password>", (args, ctx) -> {
+      if (args.size() < 6) {
+        ctx.ui().println("Usage: read-tid <tid> <mem> <wordPtr> <num> <password>");
+        return;
+      }
+      String tid = args.get(1);
+      int mem = parseInt(args.get(2), -1);
+      int wordPtr = parseInt(args.get(3), -1);
+      int num = parseInt(args.get(4), -1);
+      String pwd = args.get(5);
+      if (mem < 0 || wordPtr < 0 || num <= 0) {
+        ctx.ui().println("Invalid parameters.");
+        return;
+      }
+      String data = ctx.reader().readDataByTid(tid, mem, wordPtr, num, pwd);
+      if (data == null) {
+        ctx.ui().println("Read failed.");
+      } else {
+        ctx.ui().println("Data: " + data);
+      }
+    });
+
+    registry.register("write-epc", "write-epc <epc> <mem> <wordPtr> <password> <data>", (args, ctx) -> {
+      if (args.size() < 6) {
+        ctx.ui().println("Usage: write-epc <epc> <mem> <wordPtr> <password> <data>");
+        return;
+      }
+      if (!ctx.ui().confirm("Write EPC memory?")) return;
+      String epc = args.get(1);
+      int mem = parseInt(args.get(2), -1);
+      int wordPtr = parseInt(args.get(3), -1);
+      String pwd = args.get(4);
+      String data = args.get(5);
+      if (mem < 0 || wordPtr < 0) {
+        ctx.ui().println("Invalid parameters.");
+        return;
+      }
+      Result r = ctx.reader().writeDataByEpc(epc, mem, wordPtr, pwd, data);
+      ctx.ui().println(r.ok() ? "Write success." : "Write failed: " + r.code());
+    });
+
+    registry.register("write-tid", "write-tid <tid> <mem> <wordPtr> <password> <data>", (args, ctx) -> {
+      if (args.size() < 6) {
+        ctx.ui().println("Usage: write-tid <tid> <mem> <wordPtr> <password> <data>");
+        return;
+      }
+      if (!ctx.ui().confirm("Write TID memory?")) return;
+      String tid = args.get(1);
+      int mem = parseInt(args.get(2), -1);
+      int wordPtr = parseInt(args.get(3), -1);
+      String pwd = args.get(4);
+      String data = args.get(5);
+      if (mem < 0 || wordPtr < 0) {
+        ctx.ui().println("Invalid parameters.");
+        return;
+      }
+      Result r = ctx.reader().writeDataByTid(tid, mem, wordPtr, pwd, data);
+      ctx.ui().println(r.ok() ? "Write success." : "Write failed: " + r.code());
+    });
+
+    registry.register("write-epc-id", "write-epc-id <epc> <password>", (args, ctx) -> {
+      if (args.size() < 3) {
+        ctx.ui().println("Usage: write-epc-id <epc> <password>");
+        return;
+      }
+      if (!ctx.ui().confirm("Overwrite EPC ID?")) return;
+      String epc = args.get(1);
+      String pwd = args.get(2);
+      Result r = ctx.reader().writeEpc(epc, pwd);
+      ctx.ui().println(r.ok() ? "EPC updated." : "WriteEPC failed: " + r.code());
+    });
+
+    registry.register("write-epc-by-tid", "write-epc-by-tid <tid> <epc> <password>", (args, ctx) -> {
+      if (args.size() < 4) {
+        ctx.ui().println("Usage: write-epc-by-tid <tid> <epc> <password>");
+        return;
+      }
+      if (!ctx.ui().confirm("Overwrite EPC by TID?")) return;
+      String tid = args.get(1);
+      String epc = args.get(2);
+      String pwd = args.get(3);
+      Result r = ctx.reader().writeEpcByTid(tid, epc, pwd);
+      ctx.ui().println(r.ok() ? "EPC updated." : "WriteEPCByTID failed: " + r.code());
+    });
+
+    registry.register("lock", "lock <epc> <select> <protect> <password>", (args, ctx) -> {
+      if (args.size() < 5) {
+        ctx.ui().println("Usage: lock <epc> <select> <protect> <password>");
+        return;
+      }
+      if (!ctx.ui().confirm("Lock tag memory? This may be irreversible.")) return;
+      String epc = args.get(1);
+      int select = parseInt(args.get(2), -1);
+      int protect = parseInt(args.get(3), -1);
+      String pwd = args.get(4);
+      if (select < 0 || protect < 0) {
+        ctx.ui().println("Invalid parameters.");
+        return;
+      }
+      Result r = ctx.reader().lock(epc, select, protect, pwd);
+      ctx.ui().println(r.ok() ? "Lock success." : "Lock failed: " + r.code());
+    });
+
+    registry.register("kill", "kill <epc> <password>", (args, ctx) -> {
+      if (args.size() < 3) {
+        ctx.ui().println("Usage: kill <epc> <password>");
+        return;
+      }
+      if (!ctx.ui().confirm("KILL tag? This is permanent and irreversible.")) return;
+      String epc = args.get(1);
+      String pwd = args.get(2);
+      Result r = ctx.reader().kill(epc, pwd);
+      ctx.ui().println(r.ok() ? "Kill success." : "Kill failed: " + r.code());
+    });
+
     registry.register("inv", "inv start|stop", (args, ctx) -> {
       if (args.size() < 2) {
         ctx.ui().println("Usage: inv start|stop");
@@ -328,4 +465,3 @@ public final class Main {
     }
   }
 }
-

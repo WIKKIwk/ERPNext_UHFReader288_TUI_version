@@ -170,6 +170,60 @@ public final class ReaderClient {
     return rc == 0 ? Result.ok() : Result.fail(rc);
   }
 
+  public String readDataByEpc(String epc, int mem, int wordPtr, int num, String password) {
+    if (!connected || reader == null) return null;
+    try {
+      return reader.ReadDataByEPC(epc, (byte) mem, (byte) wordPtr, (byte) num, password);
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
+  public String readDataByTid(String tid, int mem, int wordPtr, int num, String password) {
+    if (!connected || reader == null) return null;
+    try {
+      return reader.ReadDataByTID(tid, (byte) mem, (byte) wordPtr, (byte) num, password);
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
+  public Result writeDataByEpc(String epc, int mem, int wordPtr, String password, String data) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.WriteDataByEPC(epc, (byte) mem, (byte) wordPtr, password, data);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
+  public Result writeDataByTid(String tid, int mem, int wordPtr, String password, String data) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.WriteDataByTID(tid, (byte) mem, (byte) wordPtr, password, data);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
+  public Result writeEpc(String epc, String password) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.WriteEPC(epc, password);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
+  public Result writeEpcByTid(String tid, String epc, String password) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.WriteEPCByTID(tid, epc, password);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
+  public Result lock(String epc, int select, int protect, String password) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.Lock(epc, (byte) select, (byte) protect, password);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
+  public Result kill(String epc, String password) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.Kill(epc, password);
+    return rc == 0 ? Result.ok() : Result.fail(rc);
+  }
+
   public static boolean probe(String ip, int port, int readerType, int log) {
     try {
       CReader r = new CReader(ip, port, readerType, log);
@@ -184,4 +238,3 @@ public final class ReaderClient {
     }
   }
 }
-
