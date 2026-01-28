@@ -164,10 +164,8 @@ public final class ConsoleUi {
             int ch2 = System.in.read();
             if (ch2 == 'A') { // up
               idx = (idx - 1 + options.length) % options.length;
-              continue;
             } else if (ch2 == 'B') { // down
               idx = (idx + 1) % options.length;
-              continue;
             } else if (ch2 == 'D') { // left
               return NAV_BACK;
             } else if (ch2 == 'C') { // right
