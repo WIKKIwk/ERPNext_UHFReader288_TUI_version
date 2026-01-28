@@ -16,12 +16,14 @@ public final class ConsoleUi {
   private static final String ANSI_REVERSE = "\033[7m";
 
   public void println(String s) {
+    resetMenuState();
     synchronized (lock) {
       System.out.println(s);
     }
   }
 
   public void prompt() {
+    resetMenuState();
     System.out.print("uhf> ");
     System.out.flush();
   }
@@ -37,6 +39,7 @@ public final class ConsoleUi {
   public String readLine(String prompt) {
     try {
       if (prompt != null && !prompt.isEmpty()) {
+        resetMenuState();
         System.out.print(prompt);
         System.out.flush();
       }
@@ -52,7 +55,7 @@ public final class ConsoleUi {
     }
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
     try {
-      renderSwipeMenu(label, options, idx, true);
+      renderSwipeMenu(label, options, idx, lastMenuLines == 0);
       while (true) {
         int ch = System.in.read();
         if (ch == -1) return idx;
@@ -104,6 +107,7 @@ public final class ConsoleUi {
   }
 
   public void printTag(TagRead tag) {
+    resetMenuState();
     synchronized (lock) {
       String t = LocalTime.now().toString();
       System.out.println(t + " EPC=" + tag.epcId() + " RSSI=" + tag.rssi() + " ANT=" + tag.antId());
@@ -157,6 +161,10 @@ public final class ConsoleUi {
   private void moveCursorUp(int lines) {
     if (lines <= 0) return;
     System.out.print("\033[" + lines + "A\r");
+  }
+
+  private void resetMenuState() {
+    lastMenuLines = 0;
   }
 
   private String clearLine(String s) {
