@@ -696,7 +696,17 @@ public final class Main {
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 7) return;
       switch (sel) {
-        case 0 -> registry.execute(List.of("power", String.valueOf(askInt(ui, "Power (0-33)", 30))), ctx);
+        case 0 -> {
+          String[] items = new String[34];
+          for (int i = 0; i <= 33; i++) {
+            items[i] = i + " dBm";
+          }
+          int p = ui.selectOptionPaged("Power", items, 30, 12);
+          if (p == ConsoleUi.NAV_BACK) return;
+          if (p == ConsoleUi.NAV_FORWARD) p = ui.getLastMenuIndex();
+          if (p < 0) p = 30;
+          registry.execute(List.of("power", String.valueOf(p)), ctx);
+        }
         case 1 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
