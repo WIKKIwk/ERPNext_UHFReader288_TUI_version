@@ -14,6 +14,7 @@ public final class ConsoleUi {
   private String lastMenuLabel;
   private String[] lastMenuOptions;
   private int lastMenuIndex = 0;
+  private int lastMenuWidth = 0;
   private String statusLine;
   private String inputPrompt;
   private static final String ANSI_RESET = "\033[0m";
@@ -128,7 +129,7 @@ public final class ConsoleUi {
   }
 
   public boolean confirm(String message) {
-    String line = readLine(message + " Type YES to continue: ");
+    String line = readLineInMenu(message + " Type YES to continue: ");
     if (line == null) return false;
     return "YES".equalsIgnoreCase(line.trim());
   }
@@ -137,19 +138,43 @@ public final class ConsoleUi {
     if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
       return readLine(prompt);
     }
-    inputPrompt = prompt == null ? "" : prompt;
-    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
-    moveCursorUp(3);
-    System.out.print("\r");
-    System.out.print("\033[2C");
-    if (inputPrompt != null) {
-      System.out.print(inputPrompt);
+    if (!setTerminalRaw(true)) {
+      return readLine(prompt);
     }
-    System.out.flush();
-    String line = readLine();
-    inputPrompt = null;
-    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
-    return line;
+    inputPrompt = prompt == null ? "" : prompt;
+    StringBuilder buf = new StringBuilder();
+    try {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+      renderInputLine(buf.toString());
+      while (true) {
+        int ch = System.in.read();
+        if (ch == -1) break;
+        if (ch == '\r' || ch == '\n') break;
+        if (ch == 27) { // ESC or arrows
+          int ch1 = System.in.read();
+          if (ch1 == '[') {
+            System.in.read();
+            continue;
+          }
+          break;
+        }
+        if (ch == 127 || ch == 8) {
+          if (!buf.isEmpty()) buf.deleteCharAt(buf.length() - 1);
+          renderInputLine(buf.toString());
+          continue;
+        }
+        if (ch >= 32) {
+          buf.append((char) ch);
+          renderInputLine(buf.toString());
+        }
+      }
+    } catch (Throwable ignored) {
+    } finally {
+      setTerminalRaw(false);
+      inputPrompt = null;
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+    return buf.toString();
   }
 
   public void showLines(String title, List<String> lines) {
@@ -161,7 +186,7 @@ public final class ConsoleUi {
       return;
     }
     renderMessageBox(title, lines, "Press Enter to return");
-    readLine();
+    readLineInMenu("");
     renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
   }
 
@@ -205,6 +230,7 @@ public final class ConsoleUi {
     lastMenuLabel = label;
     lastMenuOptions = options;
     lastMenuIndex = idx;
+    lastMenuWidth = width;
 
     System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
     System.out.print(clearLine(v + " " + applyStyle(padRight(label, width), style.bold) + " " + v) + "\n");
@@ -231,6 +257,7 @@ public final class ConsoleUi {
 
   private void resetMenuState() {
     lastMenuLines = 0;
+    lastMenuWidth = 0;
     statusLine = null;
     inputPrompt = null;
     lastMenuLabel = null;
@@ -278,6 +305,24 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private void renderInputLine(String value) {
+    if (lastMenuWidth <= 0) return;
+    String prompt = inputPrompt == null ? "" : inputPrompt;
+    String full = prompt + value;
+    String visible = full;
+    if (visible.length() > lastMenuWidth) {
+      visible = visible.substring(visible.length() - lastMenuWidth);
+    }
+    moveCursorUp(3);
+    System.out.print("\r");
+    System.out.print("\033[2K");
+    System.out.print("│ " + padRight(visible, lastMenuWidth) + " │");
+    int cursorCol = 2 + Math.min(full.length(), lastMenuWidth);
+    System.out.print("\r");
+    System.out.print("\033[" + cursorCol + "C");
+    System.out.flush();
   }
 
   private void renderMessageBox(String title, List<String> lines, String footer) {
