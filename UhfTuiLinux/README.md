@@ -59,17 +59,19 @@ SDK_JAR=/path/to/CReader.jar ./UhfTuiLinux/run.sh
 ./UhfTuiLinux/run.sh
 ```
 
-On startup, you will see single‑line “swipe” choices:
-
-```
-Auto connect [LAN|USB|Skip] (↑/↓ + Enter)
-```
-
-- **LAN** → automatically scan subnets and connect  
-- **USB** → tries to detect **USB network interfaces (RNDIS/ECM)** and then uses LAN logic  
-- **Skip** → manual mode
-
+On startup you enter a **classic menu TUI**. Navigate with **↑/↓ + Enter**.  
 If ANSI/TTY features are missing, the UI falls back to numeric selection.
+
+Main menu options:
+
+- Connection
+- Scan/Auto
+- Inventory
+- Tag Ops
+- Config/IO
+- Info
+- Command shell
+- Quit
 
 ---
 
@@ -85,7 +87,14 @@ connect <ip> [port] [readerType] [log]
 - `readerType` default: `4` (use `16` for 16‑antenna models)
 - `log` default: `0`
 
-### 5.2 Auto‑Discovery
+### 5.2 Auto‑Discovery (Menu)
+
+Use **Scan/Auto** in the menu:
+
+- **LAN auto‑scan** → scans detected subnets
+- **USB auto‑scan** → scans USB RNDIS/ECM interfaces and falls back to LAN if none are found
+
+### 5.3 Auto‑Discovery (Command)
 
 ```
 scan [ports|auto|auto+] [readerType] [log] [prefix]
@@ -106,14 +115,33 @@ scan 2000-2100 4 0
 - `auto+` → wide port list (more thorough, slower)
 - `ports` → custom list/range
 
-### 5.3 Inventory
+### 5.4 Inventory
 
 ```
 inv start
 inv stop
 ```
 
-### 5.4 Status / Configuration
+### 5.5 Inventory Parameters
+
+Menu:
+
+- **Inventory → Params (view)** to display current settings
+- **Inventory → Params (set)** to edit settings interactively
+
+Command:
+
+```
+inv-param get
+inv-param set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]
+```
+
+Notes:
+
+- `address` default is `255` (broadcast)
+- `readMem` values: `0=Reserve, 1=EPC, 2=TID, 3=User`
+
+### 5.6 Status / Configuration
 
 ```
 info
@@ -129,7 +157,7 @@ disconnect
 quit
 ```
 
-### 5.5 Tag Read/Write (C1G2)
+### 5.7 Tag Read/Write (C1G2)
 
 ```
 read-epc <epc> <mem> <wordPtr> <num> <password>
