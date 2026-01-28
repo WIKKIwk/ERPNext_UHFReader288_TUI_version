@@ -42,20 +42,16 @@ public final class ConsoleUi {
   }
 
   public int selectOption(String label, String[] options, int defaultIndex) {
-    if (System.console() == null) {
-      return selectOptionLine(label, options, defaultIndex);
-    }
     if (!setTerminalRaw(true)) {
       return selectOptionLine(label, options, defaultIndex);
     }
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
     try {
-      renderSwipeLine(label, options, idx);
+      renderSwipeMenu(label, options, idx, true);
       while (true) {
         int ch = System.in.read();
         if (ch == -1) return idx;
         if (ch == '\r' || ch == '\n') {
-          System.out.println();
           return idx;
         }
         if (ch == 27) { // ESC
@@ -65,12 +61,12 @@ public final class ConsoleUi {
             int ch2 = System.in.read();
             if (ch2 == 'A') {
               idx = (idx - 1 + options.length) % options.length;
-              renderSwipeLine(label, options, idx);
+              renderSwipeMenu(label, options, idx, false);
               continue;
             }
             if (ch2 == 'B') {
               idx = (idx + 1) % options.length;
-              renderSwipeLine(label, options, idx);
+              renderSwipeMenu(label, options, idx, false);
               continue;
             }
           } else {
@@ -79,19 +75,19 @@ public final class ConsoleUi {
         }
         if (ch == 'j' || ch == 'J') {
           idx = (idx + 1) % options.length;
-          renderSwipeLine(label, options, idx);
+          renderSwipeMenu(label, options, idx, false);
           continue;
         }
         if (ch == 'k' || ch == 'K') {
           idx = (idx - 1 + options.length) % options.length;
-          renderSwipeLine(label, options, idx);
+          renderSwipeMenu(label, options, idx, false);
           continue;
         }
         if (ch >= '1' && ch <= '9') {
           int n = (ch - '1');
           if (n >= 0 && n < options.length) {
             idx = n;
-            renderSwipeLine(label, options, idx);
+            renderSwipeMenu(label, options, idx, false);
           }
         }
       }
@@ -116,10 +112,22 @@ public final class ConsoleUi {
     return "YES".equalsIgnoreCase(line.trim());
   }
 
-  private void renderSwipeLine(String label, String[] options, int idx) {
-    String text = label + " [" + options[idx] + "] (↑/↓ + Enter)";
-    System.out.print("\r\033[2K" + text);
+  private void renderSwipeMenu(String label, String[] options, int idx, boolean first) {
+    int lines = 1 + options.length;
+    if (!first) {
+      moveCursorUp(lines);
+    }
+    System.out.print("\033[2K" + label + " (↑/↓ + Enter)\n");
+    for (int i = 0; i < options.length; i++) {
+      String prefix = (i == idx) ? "> " : "  ";
+      System.out.print("\033[2K" + prefix + options[i] + "\n");
+    }
     System.out.flush();
+  }
+
+  private void moveCursorUp(int lines) {
+    if (lines <= 0) return;
+    System.out.print("\033[" + lines + "A\r");
   }
 
   private int selectOptionLine(String label, String[] options, int defaultIndex) {
