@@ -18,6 +18,8 @@ public final class ConsoleUi {
   private int lastMenuIndex = 0;
   private int lastMenuWidth = 0;
   private int cursorFromMenuBottom = 0;
+  private int lastRenderedLines = 0;
+  private int lastRenderedWidth = 0;
   private String statusBase;
   private String statusMessage;
   private String inputPrompt;
@@ -322,10 +324,13 @@ public final class ConsoleUi {
     String jm = style.unicode ? "├" : "+";
     String jmr = style.unicode ? "┤" : "+";
 
+    int newLines = 8 + options.length;
     if (!first && lastMenuLines > 0) {
       int moveUp = lastMenuLines - cursorFromMenuBottom;
       if (moveUp > 0) moveCursorUp(moveUp);
-      clearBelow();
+      if (newLines < lastRenderedLines || width < lastRenderedWidth) {
+        clearBelow();
+      }
     }
 
     lastMenuLabel = label;
@@ -348,7 +353,9 @@ public final class ConsoleUi {
     System.out.print(clearLine(v + " " + applyStyle(padRight(hint, width), style.dim) + " " + v) + "\n");
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
-    lastMenuLines = 8 + options.length;
+    lastMenuLines = newLines;
+    lastRenderedLines = newLines;
+    lastRenderedWidth = width;
     cursorFromMenuBottom = 0;
     System.out.print("\033[2K");
     System.out.flush();
@@ -363,6 +370,8 @@ public final class ConsoleUi {
     lastMenuLines = 0;
     lastMenuWidth = 0;
     cursorFromMenuBottom = 0;
+    lastRenderedLines = 0;
+    lastRenderedWidth = 0;
     statusBase = null;
     statusMessage = null;
     inputPrompt = null;
