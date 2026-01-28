@@ -2,9 +2,11 @@ package uhf.sdk;
 
 import com.rfid.CReader;
 import com.rfid.ReadTag;
+import com.rfid.ReaderParameter;
 import com.rfid.TagCallback;
 import java.util.function.Consumer;
 import uhf.core.GpioStatus;
+import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.core.TagRead;
@@ -170,6 +172,58 @@ public final class ReaderClient {
     return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
+  public InventoryParams getInventoryParams() {
+    if (!connected || reader == null) {
+      return defaultInventoryParams(Result.fail(0x36));
+    }
+    try {
+      ReaderParameter p = reader.GetInventoryParameter();
+      if (p == null) return defaultInventoryParams(Result.fail(-1));
+      return new InventoryParams(
+          Result.success(),
+          p.GetAddress() & 0xFF,
+          p.GetTidPtr(),
+          p.GetTidLen(),
+          p.GetSession(),
+          p.GetQValue(),
+          p.GetScanTime(),
+          p.GetAntenna(),
+          p.GetReadType(),
+          p.GetReadMem(),
+          p.GetReadPtr(),
+          p.GetReadLength(),
+          p.GetPassword()
+      );
+    } catch (Throwable t) {
+      return defaultInventoryParams(Result.fail(-1));
+    }
+  }
+
+  public Result setInventoryParams(InventoryParams params) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    try {
+      ReaderParameter p = new ReaderParameter();
+      p.SetAddress((byte) params.address());
+      p.SetTidPtr(params.tidPtr());
+      p.SetTidLen(params.tidLen());
+      p.SetSession(params.session());
+      p.SetQValue(params.qValue());
+      p.SetScanTime(params.scanTime());
+      p.SetAntenna(params.antenna());
+      p.SetReadType(params.readType());
+      p.SetReadMem(params.readMem());
+      p.SetReadPtr(params.readPtr());
+      p.SetReadLength(params.readLength());
+      if (params.password() != null) {
+        p.SetPassword(params.password());
+      }
+      reader.SetInventoryParameter(p);
+      return Result.success();
+    } catch (Throwable t) {
+      return Result.fail(-1);
+    }
+  }
+
   public String readDataByEpc(String epc, int mem, int wordPtr, int num, String password) {
     if (!connected || reader == null) return null;
     try {
@@ -222,6 +276,24 @@ public final class ReaderClient {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.Kill(epc, password);
     return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  private static InventoryParams defaultInventoryParams(Result result) {
+    return new InventoryParams(
+        result,
+        0xFF,
+        0,
+        6,
+        1,
+        4,
+        10,
+        1,
+        0,
+        3,
+        0,
+        6,
+        "00000000"
+    );
   }
 
   public static boolean probe(String ip, int port, int readerType, int log) {
