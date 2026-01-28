@@ -3,6 +3,7 @@ package uhf.tui;
 import java.time.Duration;
 import java.util.List;
 import uhf.core.GpioStatus;
+import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.sdk.ReaderClient;
@@ -12,33 +13,12 @@ public final class Main {
     ConsoleUi ui = new ConsoleUi();
     ReaderClient reader = new ReaderClient();
     CommandRegistry registry = new CommandRegistry();
-    CommandContext ctx = new CommandContext(reader, ui);
 
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
-    ui.println("Type 'help' for commands.");
+    ui.println("Menu mode. Use ↑/↓ + Enter.");
 
     setupCommands(registry);
-    startupWizard(ui, reader);
-
-    while (true) {
-      ui.prompt();
-      String line = ui.readLine();
-      if (line == null) break;
-      List<String> tokens = Tokenizer.tokenize(line);
-      if (tokens.isEmpty()) continue;
-      String cmd = tokens.get(0).toLowerCase();
-      if (cmd.equals("quit") || cmd.equals("exit") || cmd.equals("q")) {
-        reader.disconnect();
-        break;
-      }
-      if (cmd.equals("help") || cmd.equals("?")) {
-        printHelp(registry, ui);
-        continue;
-      }
-      if (!registry.execute(tokens, ctx)) {
-        ui.println("Unknown command. Type 'help'.");
-      }
-    }
+    menuLoop(ui, reader, registry);
   }
 
   private static void setupCommands(CommandRegistry registry) {
@@ -398,6 +378,47 @@ public final class Main {
       }
       ctx.ui().println("Usage: inv start|stop");
     });
+
+    registry.register("inv-param", "inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]",
+        (args, ctx) -> {
+          if (args.size() < 2) {
+            ctx.ui().println("Usage: inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]");
+            return;
+          }
+          String sub = args.get(1).toLowerCase();
+          if (sub.equals("get")) {
+            InventoryParams p = ctx.reader().getInventoryParams();
+            printInventoryParams(ctx.ui(), p);
+            return;
+          }
+          if (sub.equals("set")) {
+            InventoryParams current = ctx.reader().getInventoryParams();
+            if (args.size() >= 13) {
+              int session = parseInt(args.get(2), current.session());
+              int q = parseInt(args.get(3), current.qValue());
+              int scanTime = parseInt(args.get(4), current.scanTime());
+              int readType = parseInt(args.get(5), current.readType());
+              int readMem = parseInt(args.get(6), current.readMem());
+              int readPtr = parseInt(args.get(7), current.readPtr());
+              int readLen = parseInt(args.get(8), current.readLength());
+              int tidPtr = parseInt(args.get(9), current.tidPtr());
+              int tidLen = parseInt(args.get(10), current.tidLen());
+              int antenna = parseInt(args.get(11), current.antenna());
+              String password = args.get(12);
+              int address = args.size() >= 14 ? parseInt(args.get(13), current.address()) : current.address();
+              InventoryParams p = new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
+                  readType, readMem, readPtr, readLen, password);
+              Result r = ctx.reader().setInventoryParams(p);
+              ctx.ui().println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+              return;
+            }
+            InventoryParams p = promptInventoryParams(ctx.ui(), current);
+            Result r = ctx.reader().setInventoryParams(p);
+            ctx.ui().println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+            return;
+          }
+          ctx.ui().println("Usage: inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]");
+        }, "invp");
   }
 
   private static void printHelp(CommandRegistry registry, ConsoleUi ui) {
@@ -406,55 +427,271 @@ public final class Main {
       ui.println("  " + def.name() + " - " + def.help());
     }
     ui.println("  help - show this help");
+    ui.println("  menu - back to menu");
     ui.println("  quit - exit");
   }
 
-  private static void startupWizard(ConsoleUi ui, ReaderClient reader) {
-    int mode = ui.selectOption("Auto connect", new String[]{"LAN", "USB", "Skip"}, 0);
-    if (mode == 2) return;
-    int readerType = ui.selectOption("ReaderType", new String[]{"4", "16"}, 0) == 1 ? 16 : 4;
-    int portMode = ui.selectOption("Ports", new String[]{"auto", "auto+", "custom"}, 0);
-    List<Integer> ports = (portMode == 1) ? NetworkScanner.widePorts()
-        : (portMode == 2 ? NetworkScanner.parsePorts(ui.readLine("Enter ports: "), true) : NetworkScanner.defaultPorts());
-    int subnetMode = ui.selectOption("Subnet", new String[]{"auto", "custom"}, 0);
-    String prefix = subnetMode == 1 ? ui.readLine("Subnet prefix (e.g. 192.168.1): ") : null;
-
-    List<String> prefixes;
-    if (mode == 1) { // USB
-      prefixes = NetworkScanner.detectUsbPrefixes();
-      if (prefixes.isEmpty()) {
-        List<String> serials = NetworkScanner.detectSerialDevices();
-        if (!serials.isEmpty()) {
-          ui.println("USB serial device(s): " + String.join(", ", serials));
-          ui.println("Linux SDK USB/serial qo‘llamaydi. LAN (RNDIS/ECM) bo‘lsa ishlaydi.");
-        }
-        prefixes = NetworkScanner.detectPrefixes();
-      }
-    } else {
-      prefixes = (prefix == null || prefix.isBlank()) ? NetworkScanner.detectPrefixes() : List.of(prefix.trim());
-    }
-
-    if (prefixes.isEmpty()) {
-      ui.println("No LAN prefixes found.");
-      return;
-    }
-
-    for (String pfx : prefixes) {
-      for (int p : ports) {
-        ui.println("Scanning subnet " + pfx + ".0/24 on port " + p + " ...");
-        NetworkScanner.HostPort hp = NetworkScanner.findReader(
-            List.of(pfx), List.of(p), readerType, 0, Duration.ofMillis(200)
-        );
-        if (hp != null) {
-          Result r = reader.connect(hp.host(), hp.port(), readerType, 0, ui::printTag, () -> {});
-          if (r.ok()) {
-            ui.println("Connected: " + hp.host() + "@" + hp.port());
+  private static void menuLoop(ConsoleUi ui, ReaderClient reader, CommandRegistry registry) {
+    CommandContext ctx = new CommandContext(reader, ui);
+    while (true) {
+      String status = reader.isConnected() ? "connected" : "disconnected";
+      int sel = ui.selectOption(
+          "Main [" + status + "]",
+          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Config/IO", "Info", "Command shell", "Quit"},
+          0
+      );
+      switch (sel) {
+        case 0 -> menuConnection(ui, ctx, registry);
+        case 1 -> menuScan(ui, ctx);
+        case 2 -> menuInventory(ui, ctx, registry);
+        case 3 -> menuTagOps(ui, ctx, registry);
+        case 4 -> menuConfig(ui, ctx, registry);
+        case 5 -> menuInfo(ui, ctx, registry);
+        case 6 -> {
+          ShellExit exit = commandShell(ui, ctx, registry);
+          if (exit == ShellExit.QUIT) {
+            reader.disconnect();
             return;
           }
         }
+        default -> {
+          reader.disconnect();
+          return;
+        }
       }
     }
-    ui.println("Auto connect failed.");
+  }
+
+  private static void menuConnection(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    while (true) {
+      int sel = ui.selectOption("Connection", new String[]{"Connect", "Disconnect", "Back"}, 0);
+      if (sel == 2) return;
+      if (sel == 1) {
+        registry.execute(List.of("disconnect"), ctx);
+        continue;
+      }
+      String ip = askString(ui, "IP address");
+      if (ip == null || ip.isBlank()) {
+        ui.println("IP is required.");
+        continue;
+      }
+      int port = askInt(ui, "Port", 27011);
+      int readerType = askInt(ui, "ReaderType (4/16)", 4);
+      int log = askInt(ui, "Log (0/1)", 0);
+      registry.execute(List.of("connect", ip, String.valueOf(port), String.valueOf(readerType), String.valueOf(log)), ctx);
+    }
+  }
+
+  private static void menuScan(ConsoleUi ui, CommandContext ctx) {
+    while (true) {
+      int sel = ui.selectOption("Scan", new String[]{"LAN auto-scan", "USB auto-scan", "Back"}, 0);
+      if (sel == 2) return;
+      int readerType = askInt(ui, "ReaderType (4/16)", 4);
+      int log = askInt(ui, "Log (0/1)", 0);
+      List<Integer> ports = choosePorts(ui);
+      String prefix = chooseSubnetPrefix(ui);
+      List<String> prefixes;
+      if (sel == 1) {
+        prefixes = NetworkScanner.detectUsbPrefixes();
+        if (prefixes.isEmpty()) {
+          List<String> serials = NetworkScanner.detectSerialDevices();
+          if (!serials.isEmpty()) {
+            ui.println("USB serial device(s): " + String.join(", ", serials));
+            ui.println("Linux SDK USB/serial qo‘llamaydi. LAN (RNDIS/ECM) bo‘lsa ishlaydi.");
+          }
+          prefixes = NetworkScanner.detectPrefixes();
+        }
+      } else {
+        prefixes = (prefix == null || prefix.isBlank()) ? NetworkScanner.detectPrefixes() : List.of(prefix.trim());
+      }
+      if (prefixes.isEmpty()) {
+        ui.println("No LAN prefixes found.");
+        continue;
+      }
+      boolean connected = false;
+      for (String pfx : prefixes) {
+        for (int p : ports) {
+          ui.println("Scanning subnet " + pfx + ".0/24 on port " + p + " ...");
+          NetworkScanner.HostPort hp = NetworkScanner.findReader(
+              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
+          );
+          if (hp != null) {
+            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, ctx.ui()::printTag, () -> {});
+            if (r.ok()) {
+              ui.println("Connected: " + hp.host() + "@" + hp.port());
+              connected = true;
+              break;
+            }
+          }
+        }
+        if (connected) break;
+      }
+      if (!connected) ui.println("No reader found.");
+    }
+  }
+
+  private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    while (true) {
+      int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Params (view)", "Params (set)", "Back"}, 0);
+      if (sel == 4) return;
+      if (sel == 0) registry.execute(List.of("inv", "start"), ctx);
+      if (sel == 1) registry.execute(List.of("inv", "stop"), ctx);
+      if (sel == 2) {
+        InventoryParams p = ctx.reader().getInventoryParams();
+        printInventoryParams(ui, p);
+        pause(ui);
+      }
+      if (sel == 3) {
+        InventoryParams current = ctx.reader().getInventoryParams();
+        InventoryParams p = promptInventoryParams(ui, current);
+        Result r = ctx.reader().setInventoryParams(p);
+        ui.println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+        pause(ui);
+      }
+    }
+  }
+
+  private static void menuTagOps(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    String[] options = {
+        "Read EPC", "Read TID", "Write EPC", "Write TID",
+        "Write EPC ID", "Write EPC by TID", "Lock", "Kill", "Back"
+    };
+    while (true) {
+      int sel = ui.selectOption("Tag Ops", options, 0);
+      if (sel == 8) return;
+      switch (sel) {
+        case 0 -> registry.execute(List.of("read-epc",
+            askString(ui, "EPC"),
+            String.valueOf(selectMem(ui)),
+            String.valueOf(askInt(ui, "WordPtr", 0)),
+            String.valueOf(askInt(ui, "Num", 1)),
+            askString(ui, "Password")), ctx);
+        case 1 -> registry.execute(List.of("read-tid",
+            askString(ui, "TID"),
+            String.valueOf(selectMem(ui)),
+            String.valueOf(askInt(ui, "WordPtr", 0)),
+            String.valueOf(askInt(ui, "Num", 1)),
+            askString(ui, "Password")), ctx);
+        case 2 -> registry.execute(List.of("write-epc",
+            askString(ui, "EPC"),
+            String.valueOf(selectMem(ui)),
+            String.valueOf(askInt(ui, "WordPtr", 0)),
+            askString(ui, "Password"),
+            askString(ui, "Data")), ctx);
+        case 3 -> registry.execute(List.of("write-tid",
+            askString(ui, "TID"),
+            String.valueOf(selectMem(ui)),
+            String.valueOf(askInt(ui, "WordPtr", 0)),
+            askString(ui, "Password"),
+            askString(ui, "Data")), ctx);
+        case 4 -> registry.execute(List.of("write-epc-id",
+            askString(ui, "EPC"),
+            askString(ui, "Password")), ctx);
+        case 5 -> registry.execute(List.of("write-epc-by-tid",
+            askString(ui, "TID"),
+            askString(ui, "EPC"),
+            askString(ui, "Password")), ctx);
+        case 6 -> registry.execute(List.of("lock",
+            askString(ui, "EPC"),
+            String.valueOf(askInt(ui, "Select", 0)),
+            String.valueOf(askInt(ui, "Protect", 0)),
+            askString(ui, "Password")), ctx);
+        case 7 -> registry.execute(List.of("kill",
+            askString(ui, "EPC"),
+            askString(ui, "Password")), ctx);
+      }
+    }
+  }
+
+  private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    String[] options = {"Power", "Region", "Beep", "GPIO Get", "GPIO Set", "Relay", "Antenna", "Back"};
+    while (true) {
+      int sel = ui.selectOption("Config/IO", options, 0);
+      if (sel == 7) return;
+      switch (sel) {
+        case 0 -> registry.execute(List.of("power", String.valueOf(askInt(ui, "Power (0-33)", 30))), ctx);
+        case 1 -> registry.execute(List.of("region",
+            String.valueOf(askInt(ui, "Band", 0)),
+            String.valueOf(askInt(ui, "MaxFreq", 0)),
+            String.valueOf(askInt(ui, "MinFreq", 0))), ctx);
+        case 2 -> registry.execute(List.of("beep", String.valueOf(askInt(ui, "Beep (0/1)", 1))), ctx);
+        case 3 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 4 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
+        case 5 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 6 -> registry.execute(List.of("antenna",
+            String.valueOf(askInt(ui, "Arg1", 0)),
+            String.valueOf(askInt(ui, "Arg2", 0))), ctx);
+      }
+    }
+  }
+
+  private static void menuInfo(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    while (true) {
+      int sel = ui.selectOption("Info", new String[]{"Reader info", "Serial", "Back"}, 0);
+      if (sel == 2) return;
+      if (sel == 0) registry.execute(List.of("info"), ctx);
+      if (sel == 1) registry.execute(List.of("serial"), ctx);
+    }
+  }
+
+  private static ShellExit commandShell(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    ui.println("Command shell. Type 'menu' to return.");
+    while (true) {
+      ui.prompt();
+      String line = ui.readLine();
+      if (line == null) return ShellExit.BACK;
+      List<String> tokens = Tokenizer.tokenize(line);
+      if (tokens.isEmpty()) continue;
+      String cmd = tokens.get(0).toLowerCase();
+      if (cmd.equals("menu") || cmd.equals("back")) return ShellExit.BACK;
+      if (cmd.equals("quit") || cmd.equals("exit") || cmd.equals("q")) return ShellExit.QUIT;
+      if (cmd.equals("help") || cmd.equals("?")) {
+        printHelp(registry, ui);
+        continue;
+      }
+      if (!registry.execute(tokens, ctx)) {
+        ui.println("Unknown command. Type 'help'.");
+      }
+    }
+  }
+
+  private static int askInt(ConsoleUi ui, String label, int def) {
+    String line = ui.readLine(label + " [" + def + "]: ");
+    if (line == null || line.isBlank()) return def;
+    return parseInt(line, def);
+  }
+
+  private static String askString(ConsoleUi ui, String label, String def) {
+    String line = ui.readLine(label + " [" + def + "]: ");
+    if (line == null || line.isBlank()) return def;
+    return line;
+  }
+
+  private static String askString(ConsoleUi ui, String label) {
+    return ui.readLine(label + ": ");
+  }
+
+  private static List<Integer> choosePorts(ConsoleUi ui) {
+    int mode = ui.selectOption("Ports", new String[]{"auto", "auto+", "custom"}, 0);
+    if (mode == 0) return NetworkScanner.defaultPorts();
+    if (mode == 1) return NetworkScanner.widePorts();
+    return NetworkScanner.parsePorts(ui.readLine("Enter ports (comma/range): "), true);
+  }
+
+  private static String chooseSubnetPrefix(ConsoleUi ui) {
+    int mode = ui.selectOption("Subnet", new String[]{"auto", "custom"}, 0);
+    if (mode == 0) return null;
+    return ui.readLine("Subnet prefix (e.g. 192.168.1): ");
+  }
+
+  private static int selectMem(ConsoleUi ui) {
+    int mode = ui.selectOption("Mem", new String[]{"Password(0)", "EPC(1)", "TID(2)", "User(3)"}, 1);
+    return switch (mode) {
+      case 0 -> 0;
+      case 2 -> 2;
+      case 3 -> 3;
+      default -> 1;
+    };
   }
 
   private static int parseInt(String s, int def) {
@@ -463,5 +700,44 @@ public final class Main {
     } catch (Exception e) {
       return def;
     }
+  }
+
+  private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current) {
+    int address = askInt(ui, "Address (0-255, 255=broadcast)", current.address());
+    int session = askInt(ui, "Session", current.session());
+    int q = askInt(ui, "QValue", current.qValue());
+    int scanTime = askInt(ui, "ScanTime", current.scanTime());
+    int antenna = askInt(ui, "Antenna", current.antenna());
+    int readType = askInt(ui, "ReadType", current.readType());
+    int readMem = askInt(ui, "ReadMem", current.readMem());
+    int readPtr = askInt(ui, "ReadPtr", current.readPtr());
+    int readLen = askInt(ui, "ReadLength", current.readLength());
+    int tidPtr = askInt(ui, "TID Ptr", current.tidPtr());
+    int tidLen = askInt(ui, "TID Len", current.tidLen());
+    String pwd = askString(ui, "Password", current.password() == null ? "" : current.password());
+    return new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
+        readType, readMem, readPtr, readLen, pwd);
+  }
+
+  private static void printInventoryParams(ConsoleUi ui, InventoryParams p) {
+    if (!p.result().ok()) {
+      ui.println("GetInventoryParameter failed: " + p.result().code());
+      return;
+    }
+    ui.println("Inventory Params:");
+    ui.println("  address=" + p.address() + " session=" + p.session() + " q=" + p.qValue() + " scanTime=" + p.scanTime()
+        + " antenna=" + p.antenna());
+    ui.println("  readType=" + p.readType() + " readMem=" + p.readMem() + " readPtr=" + p.readPtr()
+        + " readLen=" + p.readLength());
+    ui.println("  tidPtr=" + p.tidPtr() + " tidLen=" + p.tidLen() + " password=" + p.password());
+  }
+
+  private static void pause(ConsoleUi ui) {
+    ui.readLine("Press Enter to continue...");
+  }
+
+  private enum ShellExit {
+    BACK,
+    QUIT
   }
 }
