@@ -56,7 +56,7 @@ SDK_JAR=/path/to/CReader.jar ./UhfTuiLinux/run.sh
 ## 4) Quick Start
 
 ```bash
-./UhfTuiLinux/run.sh
+./run.sh
 ```
 
 On startup you enter a **classic menu TUI**. Navigate with **↑/↓ + Enter**.  
