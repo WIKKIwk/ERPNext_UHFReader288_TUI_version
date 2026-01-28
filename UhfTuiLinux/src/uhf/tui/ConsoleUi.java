@@ -15,6 +15,7 @@ public final class ConsoleUi {
   private String[] lastMenuOptions;
   private int lastMenuIndex = 0;
   private int lastMenuWidth = 0;
+  private int cursorFromMenuBottom = 0;
   private String statusLine;
   private String inputPrompt;
   private static final String ANSI_RESET = "\033[0m";
@@ -226,7 +227,8 @@ public final class ConsoleUi {
     String jmr = style.unicode ? "┤" : "+";
 
     if (!first && lastMenuLines > 0) {
-      moveCursorUp(lastMenuLines);
+      int moveUp = lastMenuLines - cursorFromMenuBottom;
+      if (moveUp > 0) moveCursorUp(moveUp);
     }
 
     lastMenuLabel = label;
@@ -250,6 +252,7 @@ public final class ConsoleUi {
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
     lastMenuLines = 8 + options.length;
+    cursorFromMenuBottom = 0;
   }
 
   private void moveCursorUp(int lines) {
@@ -260,6 +263,7 @@ public final class ConsoleUi {
   private void resetMenuState() {
     lastMenuLines = 0;
     lastMenuWidth = 0;
+    cursorFromMenuBottom = 0;
     statusLine = null;
     inputPrompt = null;
     lastMenuLabel = null;
@@ -342,6 +346,7 @@ public final class ConsoleUi {
       visible = visible.substring(visible.length() - lastMenuWidth);
     }
     moveCursorUp(3);
+    cursorFromMenuBottom = 3;
     System.out.print("\r");
     System.out.print("\033[2K");
     System.out.print("│ " + padRight(visible, lastMenuWidth) + " │");
@@ -373,7 +378,8 @@ public final class ConsoleUi {
     if (maxWidth > 0 && width > maxWidth) width = maxWidth;
 
     if (lastMenuLines > 0) {
-      moveCursorUp(lastMenuLines);
+      int moveUp = lastMenuLines - cursorFromMenuBottom;
+      if (moveUp > 0) moveCursorUp(moveUp);
     }
     System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
     System.out.print(clearLine(v + " " + applyStyle(padRight(title == null ? "" : title, width), style.bold) + " " + v) + "\n");
@@ -387,6 +393,9 @@ public final class ConsoleUi {
     System.out.print(clearLine(v + " " + applyStyle(padRight(footer == null ? "" : footer, width), style.dim) + " " + v) + "\n");
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
+    int count = lines == null ? 0 : lines.size();
+    lastMenuLines = 6 + count;
+    cursorFromMenuBottom = 0;
   }
 
   private void waitForEnter() {
