@@ -455,6 +455,7 @@ public final class Main {
 
   private static void menuLoop(ConsoleUi ui, ReaderClient reader, CommandRegistry registry) {
     CommandContext ctx = new CommandContext(reader, ui);
+    MenuId forwardTarget = null;
     while (true) {
       updateStatus(ui, reader);
       String status = reader.isConnected() ? "connected" : "disconnected";
@@ -463,13 +464,47 @@ public final class Main {
           new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Config/IO", "Info", "Command shell", "Quit"},
           0
       );
+      if (sel == ConsoleUi.NAV_BACK) {
+        continue;
+      }
+      if (sel == ConsoleUi.NAV_FORWARD && forwardTarget != null) {
+        sel = switch (forwardTarget) {
+          case CONNECTION -> 0;
+          case SCAN -> 1;
+          case INVENTORY -> 2;
+          case TAGOPS -> 3;
+          case CONFIG -> 4;
+          case INFO -> 5;
+          case SHELL -> 6;
+        };
+      } else if (sel == ConsoleUi.NAV_FORWARD) {
+        sel = ui.getLastMenuIndex();
+      }
       switch (sel) {
-        case 0 -> menuConnection(ui, ctx, registry);
-        case 1 -> menuScan(ui, ctx);
-        case 2 -> menuInventory(ui, ctx, registry);
-        case 3 -> menuTagOps(ui, ctx, registry);
-        case 4 -> menuConfig(ui, ctx, registry);
-        case 5 -> menuInfo(ui, ctx, registry);
+        case 0 -> {
+          menuConnection(ui, ctx, registry);
+          forwardTarget = MenuId.CONNECTION;
+        }
+        case 1 -> {
+          menuScan(ui, ctx);
+          forwardTarget = MenuId.SCAN;
+        }
+        case 2 -> {
+          menuInventory(ui, ctx, registry);
+          forwardTarget = MenuId.INVENTORY;
+        }
+        case 3 -> {
+          menuTagOps(ui, ctx, registry);
+          forwardTarget = MenuId.TAGOPS;
+        }
+        case 4 -> {
+          menuConfig(ui, ctx, registry);
+          forwardTarget = MenuId.CONFIG;
+        }
+        case 5 -> {
+          menuInfo(ui, ctx, registry);
+          forwardTarget = MenuId.INFO;
+        }
         case 6 -> {
           ui.exitMenuMode();
           ShellExit exit = commandShell(ui, ctx, registry);
@@ -477,6 +512,7 @@ public final class Main {
             reader.disconnect();
             return;
           }
+          forwardTarget = MenuId.SHELL;
         }
         default -> {
           reader.disconnect();
@@ -490,6 +526,8 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Connection", new String[]{"Connect", "Disconnect", "Back"}, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
       if (sel == 1) {
         registry.execute(List.of("disconnect"), ctx);
@@ -511,6 +549,8 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Scan", new String[]{"LAN auto-scan", "USB auto-scan", "Back"}, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
       int readerType = askInt(ui, "ReaderType (4/16)", 4);
       int log = askInt(ui, "Log (0/1)", 0);
@@ -560,6 +600,8 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Once (timed)", "Params (view)", "Params (set)", "Back"}, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 5) return;
       if (sel == 0) registry.execute(List.of("inv", "start"), ctx);
       if (sel == 1) registry.execute(List.of("inv", "stop"), ctx);
@@ -598,6 +640,8 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Tag Ops", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 8) return;
       switch (sel) {
         case 0 -> registry.execute(List.of("read-epc",
@@ -648,11 +692,14 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Config/IO", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 7) return;
       switch (sel) {
         case 0 -> registry.execute(List.of("power", String.valueOf(askInt(ui, "Power (0-33)", 30))), ctx);
         case 1 -> {
           RegionSelection region = selectRegion(ui);
+          if (region == null) break;
           registry.execute(List.of("region",
               String.valueOf(region.band()),
               String.valueOf(region.maxFreq()),
@@ -673,6 +720,8 @@ public final class Main {
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Info", new String[]{"Reader info", "Serial", "Back"}, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
       if (sel == 0) registry.execute(List.of("info"), ctx);
       if (sel == 1) registry.execute(List.of("serial"), ctx);
@@ -745,6 +794,8 @@ public final class Main {
     for (int i = 0; i < options.length; i++) labels[i] = options[i].label();
     labels[labels.length - 1] = "Custom";
     int sel = ui.selectOption("Region", labels, 0);
+    if (sel == ConsoleUi.NAV_BACK) return null;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     if (sel >= 0 && sel < options.length) {
       RegionOption opt = options[sel];
       double[] freqs = buildFreqList(opt.startMhz(), opt.stepMhz(), opt.count());
@@ -753,11 +804,15 @@ public final class Main {
         items[i] = i + ": " + formatMHz(freqs[i]);
       }
       int minIdx = ui.selectOptionPaged("MinFreq", items, 0, 12);
+      if (minIdx == ConsoleUi.NAV_BACK) return null;
+      if (minIdx == ConsoleUi.NAV_FORWARD) minIdx = ui.getLastMenuIndex();
       if (minIdx < 0) minIdx = 0;
       String[] maxItems = new String[items.length + 1];
       maxItems[0] = "Same as Min (" + minIdx + ")";
       System.arraycopy(items, 0, maxItems, 1, items.length);
       int maxSel = ui.selectOptionPaged("MaxFreq", maxItems, minIdx + 1, 12);
+      if (maxSel == ConsoleUi.NAV_BACK) return null;
+      if (maxSel == ConsoleUi.NAV_FORWARD) maxSel = ui.getLastMenuIndex();
       int maxIdx = maxSel <= 0 ? minIdx : maxSel - 1;
       return new RegionSelection(opt.band(), maxIdx, minIdx);
     }
@@ -851,6 +906,16 @@ public final class Main {
   private enum ShellExit {
     BACK,
     QUIT
+  }
+
+  private enum MenuId {
+    CONNECTION,
+    SCAN,
+    INVENTORY,
+    TAGOPS,
+    CONFIG,
+    INFO,
+    SHELL
   }
 
   private record RegionOption(String label, int band, double startMhz, double stepMhz, int count) {

@@ -7,6 +7,8 @@ import java.util.List;
 import uhf.core.TagRead;
 
 public final class ConsoleUi {
+  public static final int NAV_BACK = -1;
+  public static final int NAV_FORWARD = -2;
   private final Object lock = new Object();
   private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
   private int lastMenuLines = 0;
@@ -93,11 +95,10 @@ public final class ConsoleUi {
               continue;
             }
             if (ch2 == 'D') { // left
-              int back = findBackIndex(options);
-              return back >= 0 ? back : idx;
+              return NAV_BACK;
             }
             if (ch2 == 'C') { // right
-              return idx;
+              return NAV_FORWARD;
             }
           } else {
             return idx;
@@ -157,13 +158,14 @@ public final class ConsoleUi {
             int ch2 = System.in.read();
             if (ch2 == 'A') { // up
               idx = (idx - 1 + options.length) % options.length;
+              continue;
             } else if (ch2 == 'B') { // down
               idx = (idx + 1) % options.length;
+              continue;
             } else if (ch2 == 'D') { // left
-              int back = findBackIndex(options);
-              return back >= 0 ? back : idx;
+              return NAV_BACK;
             } else if (ch2 == 'C') { // right
-              return idx;
+              return NAV_FORWARD;
             } else {
               continue;
             }
@@ -190,6 +192,10 @@ public final class ConsoleUi {
     } finally {
       setTerminalRaw(false);
     }
+  }
+
+  public int getLastMenuIndex() {
+    return lastMenuIndex;
   }
 
   public void printTag(TagRead tag) {
