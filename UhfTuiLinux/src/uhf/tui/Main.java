@@ -2,10 +2,12 @@ package uhf.tui;
 
 import java.time.Duration;
 import java.util.List;
+import uhf.core.AntennaPowerInfo;
 import uhf.core.GpioStatus;
 import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
+import uhf.core.ReturnLossInfo;
 import uhf.core.WritePowerInfo;
 import uhf.sdk.ReaderClient;
 
@@ -130,6 +132,86 @@ public final class Main {
       }
       Result r = ctx.reader().setPower(p);
       ctx.ui().println(r.ok() ? "Power set: " + p : "SetRfPower failed: " + r.code());
+    });
+
+    registry.register("antpower", "antpower get | set <0-33> [count]", (args, ctx) -> {
+      if (args.size() < 2) {
+        ctx.ui().println("Usage: antpower get | set <0-33> [count]");
+        return;
+      }
+      if (!ctx.reader().isConnected()) {
+        ctx.ui().println("Not connected.");
+        return;
+      }
+      String sub = args.get(1).toLowerCase();
+      if (sub.equals("get")) {
+        int count = args.size() >= 3 ? parseInt(args.get(2), ctx.reader().getAntennaCount()) : ctx.reader().getAntennaCount();
+        AntennaPowerInfo info = ctx.reader().getRfPowerByAnt(count);
+        if (!info.result().ok()) {
+          ctx.ui().println("GetRfPowerByAnt failed: " + info.result().code());
+          return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < info.powers().length; i++) {
+          if (i > 0) sb.append(" ");
+          sb.append("Ant").append(i + 1).append("=").append(info.powers()[i]);
+        }
+        ctx.ui().println(sb.toString());
+        return;
+      }
+      if (sub.equals("set")) {
+        if (args.size() < 3) {
+          ctx.ui().println("Usage: antpower set <0-33> [count]");
+          return;
+        }
+        int p = parseInt(args.get(2), -1);
+        if (p < 0 || p > 33) {
+          ctx.ui().println("Invalid power.");
+          return;
+        }
+        int count = args.size() >= 4 ? parseInt(args.get(3), ctx.reader().getAntennaCount()) : ctx.reader().getAntennaCount();
+        if (count <= 0) count = ctx.reader().getAntennaCount();
+        int[] powers = new int[count];
+        for (int i = 0; i < count; i++) powers[i] = p;
+        Result r = ctx.reader().setRfPowerByAnt(powers);
+        ctx.ui().println(r.ok() ? "Per-antenna power set: " + p : "SetRfPowerByAnt failed: " + r.code());
+        return;
+      }
+      ctx.ui().println("Usage: antpower get | set <0-33> [count]");
+    });
+
+    registry.register("checkant", "checkant <0|1>", (args, ctx) -> {
+      if (args.size() < 2) {
+        ctx.ui().println("Usage: checkant <0|1>");
+        return;
+      }
+      int v = parseInt(args.get(1), -1);
+      if (v != 0 && v != 1) {
+        ctx.ui().println("Invalid checkant value.");
+        return;
+      }
+      Result r = ctx.reader().setCheckAnt(v == 1);
+      ctx.ui().println(r.ok() ? "Antenna check set: " + v : "SetCheckAnt failed: " + r.code());
+    });
+
+    registry.register("returnloss", "returnloss <antenna> <freqMHz>", (args, ctx) -> {
+      if (args.size() < 3) {
+        ctx.ui().println("Usage: returnloss <antenna> <freqMHz>");
+        return;
+      }
+      int ant = parseInt(args.get(1), -1);
+      double freq = parseDouble(args.get(2), -1);
+      if (ant < 0 || freq <= 0) {
+        ctx.ui().println("Invalid antenna or frequency.");
+        return;
+      }
+      int freqKhz = (int) Math.round(freq * 1000.0);
+      ReturnLossInfo info = ctx.reader().measureReturnLoss(ant, freqKhz);
+      if (!info.result().ok()) {
+        ctx.ui().println("MeasureReturnLoss failed: " + info.result().code());
+      } else {
+        ctx.ui().println("ReturnLoss ant=" + ant + " freq=" + formatMHz(freq) + " loss=" + info.lossDb() + " dB");
+      }
     });
 
     registry.register("wpower", "wpower get | set <0-33> [mode]", (args, ctx) -> {
@@ -729,13 +811,26 @@ public final class Main {
   }
 
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
-    String[] options = {"RF Power", "Write Power", "Region", "Beep", "GPIO Get", "GPIO Set", "Relay", "Antenna", "Back"};
+    String[] options = {
+        "RF Power",
+        "Write Power",
+        "Per-Antenna Power",
+        "Region",
+        "Beep",
+        "Antenna Check",
+        "Return Loss",
+        "GPIO Get",
+        "GPIO Set",
+        "Relay",
+        "Antenna",
+        "Back"
+    };
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 8) return;
+      if (sel == 11) return;
       switch (sel) {
         case 0 -> {
           int p = selectPowerValue(ui, "RF Power", 30);
@@ -743,7 +838,8 @@ public final class Main {
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
         case 1 -> menuWritePower(ui, ctx, registry);
-        case 2 -> {
+        case 2 -> menuAntennaPower(ui, ctx);
+        case 3 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
           registry.execute(List.of("region",
@@ -751,19 +847,126 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 3 -> {
+        case 4 -> {
           int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
           if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
           int val = b == 0 ? 1 : 0;
           registry.execute(List.of("beep", String.valueOf(val)), ctx);
         }
-        case 4 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 5 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
-        case 6 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
-        case 7 -> registry.execute(List.of("antenna",
+        case 5 -> menuAntennaCheck(ui, ctx);
+        case 6 -> menuReturnLoss(ui, ctx);
+        case 7 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 8 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
+        case 9 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 10 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, "Arg1", 0)),
             String.valueOf(askInt(ui, "Arg2", 0))), ctx);
+      }
+    }
+  }
+
+  private static void menuAntennaPower(ConsoleUi ui, CommandContext ctx) {
+    String[] options = {"Set all", "Set per-antenna", "Get", "Back"};
+    while (true) {
+      updateStatus(ui, ctx.reader());
+      int sel = ui.selectOption("Per-Antenna Power", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 3) return;
+      if (!ctx.reader().isConnected()) {
+        ui.setStatusMessage("Not connected.");
+        continue;
+      }
+      int count = ctx.reader().getAntennaCount();
+      if (sel == 2) {
+        AntennaPowerInfo info = ctx.reader().getRfPowerByAnt(count);
+        if (!info.result().ok()) {
+          ui.setStatusMessage("GetRfPowerByAnt failed: " + info.result().code());
+          continue;
+        }
+        String[] lines = new String[info.powers().length];
+        for (int i = 0; i < info.powers().length; i++) {
+          lines[i] = "Ant " + (i + 1) + ": " + info.powers()[i] + " dBm";
+        }
+        ui.showLines("Per-Antenna Power", List.of(lines));
+        continue;
+      }
+      if (sel == 0) {
+        int p = selectPowerValue(ui, "Set all power", 30);
+        if (p == ConsoleUi.NAV_BACK) continue;
+        int[] powers = new int[count];
+        for (int i = 0; i < count; i++) powers[i] = p;
+        Result r = ctx.reader().setRfPowerByAnt(powers);
+        ui.setStatusMessage(r.ok() ? "Per-antenna power set." : "SetRfPowerByAnt failed: " + r.code());
+        continue;
+      }
+      int[] powers = new int[count];
+      AntennaPowerInfo current = ctx.reader().getRfPowerByAnt(count);
+      if (current.result().ok() && current.powers().length == count) {
+        System.arraycopy(current.powers(), 0, powers, 0, count);
+      } else {
+        for (int i = 0; i < count; i++) powers[i] = 30;
+      }
+      boolean cancelled = false;
+      for (int i = 0; i < count; i++) {
+        int p = selectPowerValue(ui, "Ant " + (i + 1) + " Power", powers[i]);
+        if (p == ConsoleUi.NAV_BACK) {
+          cancelled = true;
+          break;
+        }
+        powers[i] = p;
+      }
+      if (cancelled) continue;
+      Result r = ctx.reader().setRfPowerByAnt(powers);
+      ui.setStatusMessage(r.ok() ? "Per-antenna power set." : "SetRfPowerByAnt failed: " + r.code());
+    }
+  }
+
+  private static void menuAntennaCheck(ConsoleUi ui, CommandContext ctx) {
+    String[] options = {"Enable (1)", "Disable (0)", "Back"};
+    while (true) {
+      updateStatus(ui, ctx.reader());
+      int sel = ui.selectOption("Antenna Check", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 2) return;
+      if (!ctx.reader().isConnected()) {
+        ui.setStatusMessage("Not connected.");
+        continue;
+      }
+      boolean enabled = sel == 0;
+      Result r = ctx.reader().setCheckAnt(enabled);
+      ui.setStatusMessage(r.ok() ? "Antenna check " + (enabled ? "enabled" : "disabled") + "."
+          : "SetCheckAnt failed: " + r.code());
+    }
+  }
+
+  private static void menuReturnLoss(ConsoleUi ui, CommandContext ctx) {
+    while (true) {
+      updateStatus(ui, ctx.reader());
+      int sel = ui.selectOption("Return Loss", new String[]{"Measure", "Back"}, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 1) return;
+      if (!ctx.reader().isConnected()) {
+        ui.setStatusMessage("Not connected.");
+        continue;
+      }
+      int ant = selectAntennaIndex(ui, ctx.reader().getAntennaCount(), 0);
+      if (ant == ConsoleUi.NAV_BACK) continue;
+      Double freqMHz = selectReturnLossFreq(ui);
+      if (freqMHz == null) continue;
+      int freqKhz = (int) Math.round(freqMHz * 1000.0);
+      ReturnLossInfo info = ctx.reader().measureReturnLoss(ant, freqKhz);
+      if (!info.result().ok()) {
+        ui.setStatusMessage("MeasureReturnLoss failed: " + info.result().code());
+      } else {
+        ui.showLines("Return Loss", List.of(
+            "Antenna: " + (ant + 1) + " (" + ant + ")",
+            "Freq: " + formatMHz(freqMHz),
+            "Loss: " + info.lossDb() + " dB"
+        ));
       }
     }
   }
@@ -935,6 +1138,14 @@ public final class Main {
     }
   }
 
+  private static double parseDouble(String s, double def) {
+    try {
+      return Double.parseDouble(s.trim());
+    } catch (Exception e) {
+      return def;
+    }
+  }
+
   private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current) {
     int addrDefault = current.address() == 255 ? 0 : 1;
     int addrSel = ui.selectOption("Address", new String[]{"Broadcast (255)", "Custom"}, addrDefault);
@@ -974,6 +1185,48 @@ public final class Main {
 
   private static void pause(ConsoleUi ui) {
     ui.readLineInMenu("Press Enter to continue...");
+  }
+
+  private static int selectAntennaIndex(ConsoleUi ui, int count, int def) {
+    int n = count > 0 ? count : 4;
+    String[] items = new String[n];
+    for (int i = 0; i < n; i++) {
+      items[i] = "Ant " + (i + 1) + " (" + i + ")";
+    }
+    int sel = ui.selectOptionPaged("Antenna", items, Math.max(0, Math.min(def, n - 1)), 10);
+    if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    return sel;
+  }
+
+  private static Double selectReturnLossFreq(ConsoleUi ui) {
+    RegionOption[] options = regionOptions();
+    String[] labels = new String[options.length + 1];
+    for (int i = 0; i < options.length; i++) labels[i] = options[i].label();
+    labels[labels.length - 1] = "Custom (MHz)";
+    int sel = ui.selectOption("Return Loss Freq", labels, 0);
+    if (sel == ConsoleUi.NAV_BACK) return null;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel >= 0 && sel < options.length) {
+      RegionOption opt = options[sel];
+      double[] freqs = buildFreqList(opt.startMhz(), opt.stepMhz(), opt.count());
+      String[] items = new String[freqs.length];
+      for (int i = 0; i < freqs.length; i++) {
+        items[i] = i + ": " + formatMHz(freqs[i]);
+      }
+      int idx = ui.selectOptionPaged("Frequency", items, freqs.length / 2, 12);
+      if (idx == ConsoleUi.NAV_BACK) return null;
+      if (idx == ConsoleUi.NAV_FORWARD) idx = ui.getLastMenuIndex();
+      if (idx < 0) idx = 0;
+      return freqs[idx];
+    }
+    String line = ui.readLineInMenu("Freq MHz (e.g. 915.25): ");
+    double freq = parseDouble(line, -1);
+    if (freq <= 0) {
+      ui.setStatusMessage("Invalid frequency.");
+      return null;
+    }
+    return freq;
   }
 
   private static int selectPowerValue(ConsoleUi ui, String label, int def) {

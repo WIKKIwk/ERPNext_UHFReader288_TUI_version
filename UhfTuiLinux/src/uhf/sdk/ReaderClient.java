@@ -5,21 +5,28 @@ import com.rfid.ReadTag;
 import com.rfid.ReaderParameter;
 import com.rfid.TagCallback;
 import java.util.function.Consumer;
+import uhf.core.AntennaPowerInfo;
 import uhf.core.GpioStatus;
 import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.core.TagRead;
+import uhf.core.ReturnLossInfo;
 import uhf.core.WritePowerInfo;
 
 public final class ReaderClient {
   private CReader reader;
   private boolean connected;
+  private int antennaCount = 4;
   private Consumer<TagRead> tagConsumer = t -> {};
   private Runnable stopListener = () -> {};
 
   public boolean isConnected() {
     return connected;
+  }
+
+  public int getAntennaCount() {
+    return antennaCount;
   }
 
   public Result connect(
@@ -32,6 +39,7 @@ public final class ReaderClient {
   ) {
     if (connected) return Result.fail(0x35);
     try {
+      antennaCount = readerType == 16 ? 16 : 4;
       tagConsumer = onTag == null ? t -> {} : onTag;
       stopListener = onStop == null ? () -> {} : onStop;
       reader = new CReader(ip, port, readerType, log);
@@ -171,6 +179,53 @@ public final class ReaderClient {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetAntenna(arg1, arg2);
     return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  public Result setRfPowerByAnt(int[] powers) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    if (powers == null || powers.length == 0) return Result.fail(-1);
+    byte[] out = new byte[powers.length];
+    for (int i = 0; i < powers.length; i++) {
+      int p = powers[i];
+      if (p < 0) p = 0;
+      if (p > 33) p = 33;
+      out[i] = (byte) (p & 0xFF);
+    }
+    int rc = reader.SetRfPowerByAnt(out);
+    return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  public AntennaPowerInfo getRfPowerByAnt(int count) {
+    if (!connected || reader == null) return new AntennaPowerInfo(Result.fail(0x36), new int[0]);
+    int n = count > 0 ? count : antennaCount;
+    byte[] out = new byte[n];
+    int rc = reader.GetRfPowerByAnt(out);
+    Result r = rc == 0 ? Result.success() : Result.fail(rc);
+    int[] powers = new int[n];
+    for (int i = 0; i < n; i++) powers[i] = out[i] & 0xFF;
+    return new AntennaPowerInfo(r, powers);
+  }
+
+  public Result setCheckAnt(boolean enabled) {
+    if (!connected || reader == null) return Result.fail(0x36);
+    int rc = reader.SetCheckAnt((byte) (enabled ? 1 : 0));
+    return rc == 0 ? Result.success() : Result.fail(rc);
+  }
+
+  public ReturnLossInfo measureReturnLoss(int antenna, int freqKhz) {
+    if (!connected || reader == null) return new ReturnLossInfo(Result.fail(0x36), 0, freqKhz, antenna);
+    int freq = Math.max(0, freqKhz);
+    byte[] testFreq = new byte[] {
+        (byte) ((freq >> 24) & 0xFF),
+        (byte) ((freq >> 16) & 0xFF),
+        (byte) ((freq >> 8) & 0xFF),
+        (byte) (freq & 0xFF)
+    };
+    byte[] out = new byte[1];
+    int rc = reader.MeasureReturnLoss(testFreq, (byte) antenna, out);
+    Result r = rc == 0 ? Result.success() : Result.fail(rc);
+    int loss = out[0] & 0xFF;
+    return new ReturnLossInfo(r, loss, freq, antenna);
   }
 
   public Result setWritePower(int powerDbm, boolean highMode) {
