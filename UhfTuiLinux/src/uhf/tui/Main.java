@@ -747,9 +747,19 @@ public final class Main {
     int sel = ui.selectOption("Region", labels, 0);
     if (sel >= 0 && sel < options.length) {
       RegionOption opt = options[sel];
-      int min = askInt(ui, "MinFreq index", 0);
-      int max = askInt(ui, "MaxFreq index", opt.maxIndex());
-      return new RegionSelection(opt.band(), max, min);
+      double[] freqs = buildFreqList(opt.startMhz(), opt.stepMhz(), opt.count());
+      String[] items = new String[freqs.length];
+      for (int i = 0; i < freqs.length; i++) {
+        items[i] = i + ": " + formatMHz(freqs[i]);
+      }
+      int minIdx = ui.selectOptionPaged("MinFreq", items, 0, 12);
+      if (minIdx < 0) minIdx = 0;
+      String[] maxItems = new String[items.length + 1];
+      maxItems[0] = "Same as Min (" + minIdx + ")";
+      System.arraycopy(items, 0, maxItems, 1, items.length);
+      int maxSel = ui.selectOptionPaged("MaxFreq", maxItems, minIdx + 1, 12);
+      int maxIdx = maxSel <= 0 ? minIdx : maxSel - 1;
+      return new RegionSelection(opt.band(), maxIdx, minIdx);
     }
     int band = askInt(ui, "Band", 0);
     int max = askInt(ui, "MaxFreq", 0);
@@ -759,14 +769,30 @@ public final class Main {
 
   private static RegionOption[] regionOptions() {
     return new RegionOption[] {
-        new RegionOption("Chinese band1", 8, 19),
-        new RegionOption("US band", 2, 49),
-        new RegionOption("Korean band", 3, 31),
-        new RegionOption("EU band", 4, 14),
-        new RegionOption("Chinese band2", 1, 19),
-        new RegionOption("US band3", 12, 52),
-        new RegionOption("ALL band", 0, 60)
+        new RegionOption("Chinese band1", 8, 840.125, 0.25, 20),
+        new RegionOption("US band", 2, 902.75, 0.5, 50),
+        new RegionOption("Korean band", 3, 917.1, 0.2, 32),
+        new RegionOption("EU band", 4, 865.1, 0.2, 15),
+        new RegionOption("Chinese band2", 1, 920.125, 0.25, 20),
+        new RegionOption("US band3", 12, 902.0, 0.5, 53),
+        new RegionOption("ALL band", 0, 840.0, 2.0, 61)
     };
+  }
+
+  private static double[] buildFreqList(double startMHz, double stepMHz, int count) {
+    double[] list = new double[count];
+    for (int i = 0; i < count; i++) {
+      list[i] = startMHz + (stepMHz * i);
+    }
+    return list;
+  }
+
+  private static String formatMHz(double mhz) {
+    String s = String.format(java.util.Locale.US, "%.3f", mhz);
+    while (s.contains(".") && (s.endsWith("0") || s.endsWith("."))) {
+      s = s.substring(0, s.length() - 1);
+    }
+    return s + " MHz";
   }
 
   private static int parseInt(String s, int def) {
@@ -827,7 +853,7 @@ public final class Main {
     QUIT
   }
 
-  private record RegionOption(String label, int band, int maxIndex) {
+  private record RegionOption(String label, int band, double startMhz, double stepMhz, int count) {
   }
 
   private record RegionSelection(int band, int maxFreq, int minFreq) {

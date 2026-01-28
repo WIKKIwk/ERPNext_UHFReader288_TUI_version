@@ -121,6 +121,51 @@ public final class ConsoleUi {
     }
   }
 
+  public int selectOptionPaged(String label, String[] options, int defaultIndex, int pageSize) {
+    if (options == null || options.length == 0) return -1;
+    int size = Math.max(4, pageSize);
+    int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
+    int page = idx / size;
+    while (true) {
+      int start = page * size;
+      int end = Math.min(options.length, start + size);
+      int pageCount = (options.length + size - 1) / size;
+      int headerOffset = 0;
+      String pageLabel = label + " (" + (page + 1) + "/" + pageCount + ")";
+      boolean showPrev = page > 0;
+      boolean showNext = end < options.length;
+      int extra = (showPrev ? 1 : 0) + (showNext ? 1 : 0);
+      String[] pageOptions = new String[(end - start) + extra];
+      int p = 0;
+      if (showPrev) {
+        pageOptions[p++] = "◀ Prev";
+        headerOffset = 1;
+      }
+      for (int i = start; i < end; i++) {
+        pageOptions[p++] = options[i];
+      }
+      if (showNext) {
+        pageOptions[p] = "Next ▶";
+      }
+      int localDefault = headerOffset + (idx - start);
+      if (localDefault < 0 || localDefault >= pageOptions.length) localDefault = 0;
+      int sel = selectOption(pageLabel, pageOptions, localDefault);
+      if (showPrev && sel == 0) {
+        page = Math.max(0, page - 1);
+        continue;
+      }
+      if (showNext && sel == pageOptions.length - 1) {
+        page = Math.min(pageCount - 1, page + 1);
+        continue;
+      }
+      int chosen = start + (sel - headerOffset);
+      if (chosen < 0 || chosen >= options.length) {
+        return -1;
+      }
+      return chosen;
+    }
+  }
+
   public void printTag(TagRead tag) {
     resetMenuState();
     synchronized (lock) {
