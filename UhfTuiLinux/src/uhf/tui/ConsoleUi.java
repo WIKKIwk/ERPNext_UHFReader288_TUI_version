@@ -323,6 +323,7 @@ public final class ConsoleUi {
     if (!first && lastMenuLines > 0) {
       int moveUp = lastMenuLines - cursorFromMenuBottom;
       if (moveUp > 0) moveCursorUp(moveUp);
+      clearBelow();
     }
 
     lastMenuLabel = label;
@@ -414,6 +415,10 @@ public final class ConsoleUi {
 
   private void resetCursorOffset() {
     cursorFromMenuBottom = 0;
+  }
+
+  private void clearBelow() {
+    System.out.print("\033[J");
   }
 
   private int findBackIndex(String[] options) {
@@ -511,6 +516,7 @@ public final class ConsoleUi {
     if (lastMenuLines > 0) {
       int moveUp = lastMenuLines - cursorFromMenuBottom;
       if (moveUp > 0) moveCursorUp(moveUp);
+      clearBelow();
     }
     System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
     System.out.print(clearLine(v + " " + applyStyle(padRight(title == null ? "" : title, width), style.bold) + " " + v) + "\n");
