@@ -651,10 +651,13 @@ public final class Main {
       if (sel == 7) return;
       switch (sel) {
         case 0 -> registry.execute(List.of("power", String.valueOf(askInt(ui, "Power (0-33)", 30))), ctx);
-        case 1 -> registry.execute(List.of("region",
-            String.valueOf(selectBand(ui)),
-            String.valueOf(askInt(ui, "MaxFreq", 0)),
-            String.valueOf(askInt(ui, "MinFreq", 0))), ctx);
+        case 1 -> {
+          RegionSelection region = selectRegion(ui);
+          registry.execute(List.of("region",
+              String.valueOf(region.band()),
+              String.valueOf(region.maxFreq()),
+              String.valueOf(region.minFreq())), ctx);
+        }
         case 2 -> registry.execute(List.of("beep", String.valueOf(askInt(ui, "Beep (0/1)", 1))), ctx);
         case 3 -> registry.execute(List.of("gpio", "get"), ctx);
         case 4 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
@@ -736,13 +739,34 @@ public final class Main {
     };
   }
 
-  private static int selectBand(ConsoleUi ui) {
-    String[] bands = {
-        "Band 0", "Band 1", "Band 2", "Band 3", "Band 4", "Band 5", "Band 6", "Custom"
+  private static RegionSelection selectRegion(ConsoleUi ui) {
+    RegionOption[] options = regionOptions();
+    String[] labels = new String[options.length + 1];
+    for (int i = 0; i < options.length; i++) labels[i] = options[i].label();
+    labels[labels.length - 1] = "Custom";
+    int sel = ui.selectOption("Region", labels, 0);
+    if (sel >= 0 && sel < options.length) {
+      RegionOption opt = options[sel];
+      int min = askInt(ui, "MinFreq index", 0);
+      int max = askInt(ui, "MaxFreq index", opt.maxIndex());
+      return new RegionSelection(opt.band(), max, min);
+    }
+    int band = askInt(ui, "Band", 0);
+    int max = askInt(ui, "MaxFreq", 0);
+    int min = askInt(ui, "MinFreq", 0);
+    return new RegionSelection(band, max, min);
+  }
+
+  private static RegionOption[] regionOptions() {
+    return new RegionOption[] {
+        new RegionOption("Chinese band1", 8, 19),
+        new RegionOption("US band", 2, 49),
+        new RegionOption("Korean band", 3, 31),
+        new RegionOption("EU band", 4, 14),
+        new RegionOption("Chinese band2", 1, 19),
+        new RegionOption("US band3", 12, 52),
+        new RegionOption("ALL band", 0, 60)
     };
-    int sel = ui.selectOption("Region Band", bands, 0);
-    if (sel >= 0 && sel <= 6) return sel;
-    return askInt(ui, "Band", 0);
   }
 
   private static int parseInt(String s, int def) {
@@ -801,5 +825,11 @@ public final class Main {
   private enum ShellExit {
     BACK,
     QUIT
+  }
+
+  private record RegionOption(String label, int band, int maxIndex) {
+  }
+
+  private record RegionSelection(int band, int maxFreq, int minFreq) {
   }
 }
