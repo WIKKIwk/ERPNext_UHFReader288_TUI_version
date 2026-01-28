@@ -99,6 +99,7 @@ OUT_DIR="$APP_DIR/out"
 mkdir -p "$OUT_DIR"
 
 rm -rf "$OUT_DIR"/*
-"$JAVAC_BIN" -encoding UTF-8 -cp "$SDK_JAR" -d "$OUT_DIR" "$APP_DIR/src/UhfTuiLinux.java"
+find "$APP_DIR/src" -name "*.java" > "$OUT_DIR/sources.txt"
+"$JAVAC_BIN" -encoding UTF-8 -cp "$SDK_JAR" -d "$OUT_DIR" @"$OUT_DIR/sources.txt"
 
-exec "$JAVA_BIN" -cp "$OUT_DIR:$SDK_JAR" UhfTuiLinux
+exec "$JAVA_BIN" -cp "$OUT_DIR:$SDK_JAR" uhf.tui.Main

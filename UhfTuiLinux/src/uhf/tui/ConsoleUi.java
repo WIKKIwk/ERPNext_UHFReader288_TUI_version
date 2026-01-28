@@ -1,0 +1,160 @@
+package uhf.tui;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.time.LocalTime;
+import java.util.List;
+import uhf.core.TagRead;
+
+public final class ConsoleUi {
+  private final Object lock = new Object();
+  private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
+  public void println(String s) {
+    synchronized (lock) {
+      System.out.println(s);
+    }
+  }
+
+  public void prompt() {
+    System.out.print("uhf> ");
+    System.out.flush();
+  }
+
+  public String readLine() {
+    try {
+      return reader.readLine();
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
+  public String readLine(String prompt) {
+    try {
+      if (prompt != null && !prompt.isEmpty()) {
+        System.out.print(prompt);
+        System.out.flush();
+      }
+      return reader.readLine();
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
+  public int selectOption(String label, String[] options, int defaultIndex) {
+    if (System.console() == null) {
+      return selectOptionLine(label, options, defaultIndex);
+    }
+    if (!setTerminalRaw(true)) {
+      return selectOptionLine(label, options, defaultIndex);
+    }
+    int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
+    try {
+      renderSwipeLine(label, options, idx);
+      while (true) {
+        int ch = System.in.read();
+        if (ch == -1) return idx;
+        if (ch == '\r' || ch == '\n') {
+          System.out.println();
+          return idx;
+        }
+        if (ch == 27) { // ESC
+          int ch1 = System.in.read();
+          if (ch1 == -1) return idx;
+          if (ch1 == '[') {
+            int ch2 = System.in.read();
+            if (ch2 == 'A') {
+              idx = (idx - 1 + options.length) % options.length;
+              renderSwipeLine(label, options, idx);
+              continue;
+            }
+            if (ch2 == 'B') {
+              idx = (idx + 1) % options.length;
+              renderSwipeLine(label, options, idx);
+              continue;
+            }
+          } else {
+            return idx;
+          }
+        }
+        if (ch == 'j' || ch == 'J') {
+          idx = (idx + 1) % options.length;
+          renderSwipeLine(label, options, idx);
+          continue;
+        }
+        if (ch == 'k' || ch == 'K') {
+          idx = (idx - 1 + options.length) % options.length;
+          renderSwipeLine(label, options, idx);
+          continue;
+        }
+        if (ch >= '1' && ch <= '9') {
+          int n = (ch - '1');
+          if (n >= 0 && n < options.length) {
+            idx = n;
+            renderSwipeLine(label, options, idx);
+          }
+        }
+      }
+    } catch (Throwable t) {
+      return selectOptionLine(label, options, defaultIndex);
+    } finally {
+      setTerminalRaw(false);
+    }
+  }
+
+  public void printTag(TagRead tag) {
+    synchronized (lock) {
+      String t = LocalTime.now().toString();
+      System.out.println(t + " EPC=" + tag.epcId() + " RSSI=" + tag.rssi() + " ANT=" + tag.antId());
+      prompt();
+    }
+  }
+
+  private void renderSwipeLine(String label, String[] options, int idx) {
+    String text = label + " [" + options[idx] + "] (↑/↓ + Enter)";
+    System.out.print("\r\033[2K" + text);
+    System.out.flush();
+  }
+
+  private int selectOptionLine(String label, String[] options, int defaultIndex) {
+    try {
+      StringBuilder sb = new StringBuilder();
+      sb.append(label).append(" (");
+      for (int i = 0; i < options.length; i++) {
+        if (i > 0) sb.append(", ");
+        sb.append(i + 1).append("=").append(options[i]);
+      }
+      sb.append(") [").append(options[defaultIndex]).append("]: ");
+      System.out.print(sb.toString());
+      System.out.flush();
+      String line = reader.readLine();
+      if (line == null) return defaultIndex;
+      line = line.trim();
+      if (line.isEmpty()) return defaultIndex;
+      try {
+        int n = Integer.parseInt(line);
+        if (n >= 1 && n <= options.length) return n - 1;
+      } catch (Exception ignored) {
+      }
+      for (int i = 0; i < options.length; i++) {
+        if (options[i].equalsIgnoreCase(line)) return i;
+      }
+      return defaultIndex;
+    } catch (Throwable ignored) {
+      return defaultIndex;
+    }
+  }
+
+  private boolean setTerminalRaw(boolean enable) {
+    try {
+      String cmd = enable
+          ? "stty -echo -icanon min 1 time 0 < /dev/tty"
+          : "stty sane < /dev/tty";
+      Process p = new ProcessBuilder("sh", "-c", cmd).inheritIO().start();
+      return p.waitFor() == 0;
+    } catch (Throwable ignored) {
+      return false;
+    }
+  }
+}
+
