@@ -92,6 +92,13 @@ public final class ConsoleUi {
               renderSwipeMenu(label, options, idx, false);
               continue;
             }
+            if (ch2 == 'D') { // left
+              int back = findBackIndex(options);
+              return back >= 0 ? back : idx;
+            }
+            if (ch2 == 'C') { // right
+              return idx;
+            }
           } else {
             return idx;
           }
@@ -152,6 +159,11 @@ public final class ConsoleUi {
               idx = (idx - 1 + options.length) % options.length;
             } else if (ch2 == 'B') { // down
               idx = (idx + 1) % options.length;
+            } else if (ch2 == 'D') { // left
+              int back = findBackIndex(options);
+              return back >= 0 ? back : idx;
+            } else if (ch2 == 'C') { // right
+              return idx;
             } else {
               continue;
             }
@@ -389,6 +401,19 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private int findBackIndex(String[] options) {
+    if (options == null) return -1;
+    for (int i = 0; i < options.length; i++) {
+      String v = options[i];
+      if (v == null) continue;
+      String s = v.trim().toLowerCase();
+      if (s.equals("back") || s.equals("return") || s.equals("exit") || s.equals("quit")) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   private String combineStatus() {
