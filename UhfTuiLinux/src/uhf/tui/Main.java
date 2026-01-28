@@ -705,7 +705,13 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 2 -> registry.execute(List.of("beep", String.valueOf(askInt(ui, "Beep (0/1)", 1))), ctx);
+        case 2 -> {
+          int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
+          if (b == ConsoleUi.NAV_BACK) return;
+          if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
+          int val = b == 0 ? 1 : 0;
+          registry.execute(List.of("beep", String.valueOf(val)), ctx);
+        }
         case 3 -> registry.execute(List.of("gpio", "get"), ctx);
         case 4 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
         case 5 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
