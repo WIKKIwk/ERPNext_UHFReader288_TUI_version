@@ -125,44 +125,58 @@ public final class ConsoleUi {
     if (options == null || options.length == 0) return -1;
     int size = Math.max(4, pageSize);
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
-    int page = idx / size;
-    while (true) {
-      int start = page * size;
-      int end = Math.min(options.length, start + size);
-      int pageCount = (options.length + size - 1) / size;
-      int headerOffset = 0;
-      String pageLabel = label + " (" + (page + 1) + "/" + pageCount + ")";
-      boolean showPrev = page > 0;
-      boolean showNext = end < options.length;
-      int extra = (showPrev ? 1 : 0) + (showNext ? 1 : 0);
-      String[] pageOptions = new String[(end - start) + extra];
-      int p = 0;
-      if (showPrev) {
-        pageOptions[p++] = "◀ Prev";
-        headerOffset = 1;
+    if (!setTerminalRaw(true)) {
+      return selectOption(label, options, defaultIndex);
+    }
+    menuMode = true;
+    int start = Math.max(0, Math.min(idx, Math.max(0, options.length - size)));
+    try {
+      while (true) {
+        int end = Math.min(options.length, start + size);
+        String pageLabel = label + " (" + (start + 1) + "-" + end + "/" + options.length + ")";
+        String[] pageOptions = new String[end - start];
+        for (int i = start; i < end; i++) {
+          pageOptions[i - start] = options[i];
+        }
+        int local = idx - start;
+        renderSwipeMenu(pageLabel, pageOptions, Math.max(0, Math.min(local, pageOptions.length - 1)), lastMenuLines == 0);
+        int ch = System.in.read();
+        if (ch == -1) return idx;
+        if (ch == '\r' || ch == '\n') return idx;
+        if (ch == 27) { // ESC
+          int ch1 = System.in.read();
+          if (ch1 == -1) return idx;
+          if (ch1 == '[') {
+            int ch2 = System.in.read();
+            if (ch2 == 'A') { // up
+              idx = (idx - 1 + options.length) % options.length;
+            } else if (ch2 == 'B') { // down
+              idx = (idx + 1) % options.length;
+            } else {
+              continue;
+            }
+          } else {
+            return idx;
+          }
+        } else if (ch == 'j' || ch == 'J') {
+          idx = (idx + 1) % options.length;
+        } else if (ch == 'k' || ch == 'K') {
+          idx = (idx - 1 + options.length) % options.length;
+        } else if (ch >= '1' && ch <= '9') {
+          int n = (ch - '1');
+          int candidate = start + n;
+          if (candidate < options.length && n < size) idx = candidate;
+        }
+        if (idx < start) start = idx;
+        if (idx >= start + size) start = idx - size + 1;
+        if (start < 0) start = 0;
+        int maxStart = Math.max(0, options.length - size);
+        if (start > maxStart) start = maxStart;
       }
-      for (int i = start; i < end; i++) {
-        pageOptions[p++] = options[i];
-      }
-      if (showNext) {
-        pageOptions[p] = "Next ▶";
-      }
-      int localDefault = headerOffset + (idx - start);
-      if (localDefault < 0 || localDefault >= pageOptions.length) localDefault = 0;
-      int sel = selectOption(pageLabel, pageOptions, localDefault);
-      if (showPrev && sel == 0) {
-        page = Math.max(0, page - 1);
-        continue;
-      }
-      if (showNext && sel == pageOptions.length - 1) {
-        page = Math.min(pageCount - 1, page + 1);
-        continue;
-      }
-      int chosen = start + (sel - headerOffset);
-      if (chosen < 0 || chosen >= options.length) {
-        return -1;
-      }
-      return chosen;
+    } catch (Throwable t) {
+      return selectOption(label, options, defaultIndex);
+    } finally {
+      setTerminalRaw(false);
     }
   }
 
