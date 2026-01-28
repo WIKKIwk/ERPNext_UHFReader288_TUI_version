@@ -379,6 +379,24 @@ public final class Main {
       ctx.ui().println("Usage: inv start|stop");
     });
 
+    registry.register("inv-once", "inv-once [ms]", (args, ctx) -> {
+      int ms = args.size() >= 2 ? parseInt(args.get(1), 1000) : 1000;
+      if (ms < 50) ms = 50;
+      Result r = ctx.reader().startInventory();
+      if (!r.ok()) {
+        ctx.ui().println("StartRead failed: " + r.code());
+        return;
+      }
+      ctx.ui().println("Scanning for " + ms + " ms ...");
+      try {
+        Thread.sleep(ms);
+      } catch (InterruptedException ignored) {
+        Thread.currentThread().interrupt();
+      }
+      Result stop = ctx.reader().stopInventory();
+      ctx.ui().println(stop.ok() ? "Scan stopped." : "StopRead failed: " + stop.code());
+    }, "once");
+
     registry.register("inv-param", "inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]",
         (args, ctx) -> {
           if (args.size() < 2) {
@@ -532,16 +550,21 @@ public final class Main {
 
   private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
-      int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Params (view)", "Params (set)", "Back"}, 0);
-      if (sel == 4) return;
+      int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Once (timed)", "Params (view)", "Params (set)", "Back"}, 0);
+      if (sel == 5) return;
       if (sel == 0) registry.execute(List.of("inv", "start"), ctx);
       if (sel == 1) registry.execute(List.of("inv", "stop"), ctx);
       if (sel == 2) {
+        int ms = askInt(ui, "Duration ms", 1000);
+        registry.execute(List.of("inv-once", String.valueOf(ms)), ctx);
+        pause(ui);
+      }
+      if (sel == 3) {
         InventoryParams p = ctx.reader().getInventoryParams();
         printInventoryParams(ui, p);
         pause(ui);
       }
-      if (sel == 3) {
+      if (sel == 4) {
         InventoryParams current = ctx.reader().getInventoryParams();
         InventoryParams p = promptInventoryParams(ui, current);
         Result r = ctx.reader().setInventoryParams(p);
