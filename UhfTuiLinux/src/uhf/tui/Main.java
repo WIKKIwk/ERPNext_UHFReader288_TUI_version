@@ -652,7 +652,7 @@ public final class Main {
       switch (sel) {
         case 0 -> registry.execute(List.of("power", String.valueOf(askInt(ui, "Power (0-33)", 30))), ctx);
         case 1 -> registry.execute(List.of("region",
-            String.valueOf(askInt(ui, "Band", 0)),
+            String.valueOf(selectBand(ui)),
             String.valueOf(askInt(ui, "MaxFreq", 0)),
             String.valueOf(askInt(ui, "MinFreq", 0))), ctx);
         case 2 -> registry.execute(List.of("beep", String.valueOf(askInt(ui, "Beep (0/1)", 1))), ctx);
@@ -734,6 +734,15 @@ public final class Main {
       case 3 -> 3;
       default -> 1;
     };
+  }
+
+  private static int selectBand(ConsoleUi ui) {
+    String[] bands = {
+        "Band 0", "Band 1", "Band 2", "Band 3", "Band 4", "Band 5", "Band 6", "Custom"
+    };
+    int sel = ui.selectOption("Region Band", bands, 0);
+    if (sel >= 0 && sel <= 6) return sel;
+    return askInt(ui, "Band", 0);
   }
 
   private static int parseInt(String s, int def) {
