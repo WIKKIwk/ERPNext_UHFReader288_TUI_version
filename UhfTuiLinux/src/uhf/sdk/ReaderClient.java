@@ -52,7 +52,7 @@ public final class ReaderClient {
       int rc = reader.Connect();
       if (rc == 0) {
         connected = true;
-        return Result.ok();
+        return Result.success();
       }
       reader = null;
       return Result.fail(rc);
@@ -63,13 +63,13 @@ public final class ReaderClient {
   }
 
   public Result disconnect() {
-    if (!connected || reader == null) return Result.ok();
+    if (!connected || reader == null) return Result.success();
     try {
       try { reader.StopRead(); } catch (Throwable ignored) {}
       reader.DisConnect();
       reader = null;
       connected = false;
-      return Result.ok();
+      return Result.success();
     } catch (Throwable t) {
       reader = null;
       connected = false;
@@ -80,14 +80,14 @@ public final class ReaderClient {
   public Result startInventory() {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.StartRead();
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result stopInventory() {
     if (!connected || reader == null) return Result.fail(0x36);
     try {
       reader.StopRead();
-      return Result.ok();
+      return Result.success();
     } catch (Throwable t) {
       return Result.fail(-1);
     }
@@ -96,31 +96,31 @@ public final class ReaderClient {
   public Result setPower(int powerDbm) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetRfPower(powerDbm);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result setRegion(int band, int maxFreq, int minFreq) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetRegion(band, maxFreq, minFreq);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result setBeep(int enabled) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetBeepNotification(enabled);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result setRelay(int value) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetRelay(value);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result setGpio(int mask) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetGPIO(mask);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public GpioStatus getGpio() {
@@ -128,7 +128,7 @@ public final class ReaderClient {
     byte[] out = new byte[1];
     int rc = reader.GetGPIOStatus(out);
     int mask = out[0] & 0xFF;
-    return new GpioStatus(rc == 0 ? Result.ok() : Result.fail(rc), mask);
+    return new GpioStatus(rc == 0 ? Result.success() : Result.fail(rc), mask);
   }
 
   public ReaderInfo getInfo() {
@@ -141,7 +141,7 @@ public final class ReaderClient {
     byte[] beep = new byte[1];
     int[] ant = new int[1];
     int rc = reader.GetUHFInformation(version, power, band, maxFre, minFre, beep, ant);
-    Result result = rc == 0 ? Result.ok() : Result.fail(rc);
+    Result result = rc == 0 ? Result.success() : Result.fail(rc);
     return new ReaderInfo(
         result,
         version[0] & 0xFF,
@@ -167,7 +167,7 @@ public final class ReaderClient {
   public Result setAntenna(int arg1, int arg2) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.SetAntenna(arg1, arg2);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public String readDataByEpc(String epc, int mem, int wordPtr, int num, String password) {
@@ -191,37 +191,37 @@ public final class ReaderClient {
   public Result writeDataByEpc(String epc, int mem, int wordPtr, String password, String data) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.WriteDataByEPC(epc, (byte) mem, (byte) wordPtr, password, data);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result writeDataByTid(String tid, int mem, int wordPtr, String password, String data) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.WriteDataByTID(tid, (byte) mem, (byte) wordPtr, password, data);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result writeEpc(String epc, String password) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.WriteEPC(epc, password);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result writeEpcByTid(String tid, String epc, String password) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.WriteEPCByTID(tid, epc, password);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result lock(String epc, int select, int protect, String password) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.Lock(epc, (byte) select, (byte) protect, password);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public Result kill(String epc, String password) {
     if (!connected || reader == null) return Result.fail(0x36);
     int rc = reader.Kill(epc, password);
-    return rc == 0 ? Result.ok() : Result.fail(rc);
+    return rc == 0 ? Result.success() : Result.fail(rc);
   }
 
   public static boolean probe(String ip, int port, int readerType, int log) {

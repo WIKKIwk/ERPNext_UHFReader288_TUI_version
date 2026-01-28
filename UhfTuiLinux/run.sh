@@ -5,15 +5,42 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/UhfTuiLinux"
 SDK_JAR="${SDK_JAR:-}"
 
-if [[ -z "${SDK_JAR}" ]]; then
-  if [[ -f "$ROOT_DIR/lib/CReader.jar" ]]; then
-    SDK_JAR="$ROOT_DIR/lib/CReader.jar"
-  elif [[ -f "$ROOT_DIR/SDK/Java-linux/CReader.jar" ]]; then
-    SDK_JAR="$ROOT_DIR/SDK/Java-linux/CReader.jar"
+resolve_sdk() {
+  # 1) Explicit env
+  if [[ -n "${SDK_JAR}" && -f "${SDK_JAR}" ]]; then
+    echo "${SDK_JAR}"
+    return 0
   fi
-fi
 
-if [[ ! -f "$SDK_JAR" ]]; then
+  # 2) Repo-local locations
+  local candidates=(
+    "$ROOT_DIR/lib/CReader.jar"
+    "$ROOT_DIR/SDK/Java-linux/CReader.jar"
+    "$ROOT_DIR/../ST-8504 New SDK/ST-8504 SDK/SDK/Java-linux/CReader.jar"
+  )
+  for c in "${candidates[@]}"; do
+    if [[ -f "$c" ]]; then
+      echo "$c"
+      return 0
+    fi
+  done
+
+  # 3) Auto-discover under ~/Downloads (bounded)
+  if [[ -d "$HOME/Downloads" ]]; then
+    local found
+    found="$(find "$HOME/Downloads" -maxdepth 6 -type f -name 'CReader.jar' -print -quit 2>/dev/null || true)"
+    if [[ -n "$found" && -f "$found" ]]; then
+      echo "$found"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+SDK_JAR="$(resolve_sdk || true)"
+
+if [[ -z "${SDK_JAR}" || ! -f "${SDK_JAR}" ]]; then
   echo "SDK topilmadi."
   echo "CReader.jar ni repo ichiga qo'ying: $ROOT_DIR/lib/CReader.jar"
   echo "Yoki SDK_JAR=/path/to/CReader.jar ./UhfTuiLinux/run.sh"
