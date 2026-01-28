@@ -9,6 +9,11 @@ import uhf.core.TagRead;
 public final class ConsoleUi {
   private final Object lock = new Object();
   private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+  private int lastMenuLines = 0;
+  private static final String ANSI_RESET = "\033[0m";
+  private static final String ANSI_BOLD = "\033[1m";
+  private static final String ANSI_DIM = "\033[2m";
+  private static final String ANSI_REVERSE = "\033[7m";
 
   public void println(String s) {
     synchronized (lock) {
@@ -113,21 +118,88 @@ public final class ConsoleUi {
   }
 
   private void renderSwipeMenu(String label, String[] options, int idx, boolean first) {
-    int lines = 1 + options.length;
-    if (!first) {
-      moveCursorUp(lines);
+    MenuStyle style = style();
+    String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
+    int width = Math.max(label.length(), hint.length());
+    for (String opt : options) {
+      int len = (style.fancy ? 2 : 2) + opt.length();
+      if (len > width) width = len;
     }
-    System.out.print("\033[2K" + label + " (↑/↓ + Enter)\n");
+    String h = style.unicode ? "─" : "-";
+    String v = style.unicode ? "│" : "|";
+    String tl = style.unicode ? "┌" : "+";
+    String tr = style.unicode ? "┐" : "+";
+    String bl = style.unicode ? "└" : "+";
+    String br = style.unicode ? "┘" : "+";
+    String jm = style.unicode ? "├" : "+";
+    String jmr = style.unicode ? "┤" : "+";
+
+    if (!first && lastMenuLines > 0) {
+      moveCursorUp(lastMenuLines);
+    }
+
+    System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(label, width), style.bold) + " " + v) + "\n");
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
     for (int i = 0; i < options.length; i++) {
-      String prefix = (i == idx) ? "> " : "  ";
-      System.out.print("\033[2K" + prefix + options[i] + "\n");
+      String prefix = (i == idx) ? (style.unicode ? "▶ " : "> ") : "  ";
+      String raw = padRight(prefix + options[i], width);
+      String line = (i == idx && style.ansi) ? ANSI_REVERSE + raw + ANSI_RESET : raw;
+      System.out.print(clearLine(v + " " + line + " " + v) + "\n");
     }
+    System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(padRight(hint, width), style.dim) + " " + v) + "\n");
+    System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
+    lastMenuLines = 6 + options.length;
   }
 
   private void moveCursorUp(int lines) {
     if (lines <= 0) return;
     System.out.print("\033[" + lines + "A\r");
+  }
+
+  private String clearLine(String s) {
+    return "\033[2K" + s;
+  }
+
+  private String applyStyle(String s, String style) {
+    if (style.isEmpty()) return s;
+    return style + s + ANSI_RESET;
+  }
+
+  private String padRight(String s, int width) {
+    if (s.length() >= width) return s;
+    StringBuilder sb = new StringBuilder(width);
+    sb.append(s);
+    while (sb.length() < width) sb.append(' ');
+    return sb.toString();
+  }
+
+  private String repeat(String s, int n) {
+    StringBuilder sb = new StringBuilder(n * s.length());
+    for (int i = 0; i < n; i++) sb.append(s);
+    return sb.toString();
+  }
+
+  private MenuStyle style() {
+    boolean ansi = supportsAnsi();
+    boolean unicode = ansi;
+    String bold = ansi ? ANSI_BOLD : "";
+    String dim = ansi ? ANSI_DIM : "";
+    return new MenuStyle(ansi, unicode, bold, dim, ansi);
+  }
+
+  private boolean supportsAnsi() {
+    String term = System.getenv("TERM");
+    if (term == null || term.equalsIgnoreCase("dumb")) return false;
+    if (System.getenv("NO_COLOR") != null) return false;
+    String os = System.getProperty("os.name", "").toLowerCase();
+    if (os.contains("win")) return false;
+    return true;
+  }
+
+  private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
   }
 
   private int selectOptionLine(String label, String[] options, int defaultIndex) {
