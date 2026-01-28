@@ -662,8 +662,10 @@ public final class Main {
         continue;
       }
       int port = askInt(ui, "Port", 27011);
-      int readerType = askInt(ui, "ReaderType (4/16)", 4);
-      int log = askInt(ui, "Log (0/1)", 0);
+      int readerType = selectReaderType(ui, 4);
+      if (readerType == ConsoleUi.NAV_BACK) return;
+      int log = selectLog(ui, 0);
+      if (log == ConsoleUi.NAV_BACK) return;
       registry.execute(List.of("connect", ip, String.valueOf(port), String.valueOf(readerType), String.valueOf(log)), ctx);
     }
   }
@@ -675,8 +677,10 @@ public final class Main {
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
-      int readerType = askInt(ui, "ReaderType (4/16)", 4);
-      int log = askInt(ui, "Log (0/1)", 0);
+      int readerType = selectReaderType(ui, 4);
+      if (readerType == ConsoleUi.NAV_BACK) return;
+      int log = selectLog(ui, 0);
+      if (log == ConsoleUi.NAV_BACK) return;
       List<Integer> ports = choosePorts(ui);
       String prefix = chooseSubnetPrefix(ui);
       List<String> prefixes;
@@ -1185,6 +1189,22 @@ public final class Main {
 
   private static void pause(ConsoleUi ui) {
     ui.readLineInMenu("Press Enter to continue...");
+  }
+
+  private static int selectReaderType(ConsoleUi ui, int def) {
+    int idx = def == 16 ? 1 : 0;
+    int sel = ui.selectOption("ReaderType", new String[]{"4", "16"}, idx);
+    if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    return sel == 1 ? 16 : 4;
+  }
+
+  private static int selectLog(ConsoleUi ui, int def) {
+    int idx = def == 1 ? 1 : 0;
+    int sel = ui.selectOption("Log", new String[]{"0 (off)", "1 (on)"}, idx);
+    if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    return sel == 1 ? 1 : 0;
   }
 
   private static int selectAntennaIndex(ConsoleUi ui, int count, int def) {
