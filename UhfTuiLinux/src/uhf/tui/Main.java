@@ -727,7 +727,9 @@ public final class Main {
   }
 
   private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current) {
-    int address = askInt(ui, "Address (0-255, 255=broadcast)", current.address());
+    int addrDefault = current.address() == 255 ? 0 : 1;
+    int addrSel = ui.selectOption("Address", new String[]{"Broadcast (255)", "Custom"}, addrDefault);
+    int address = addrSel == 0 ? 255 : askInt(ui, "Address (0-255)", current.address());
     int session = askInt(ui, "Session", current.session());
     int q = askInt(ui, "QValue", current.qValue());
     int scanTime = askInt(ui, "ScanTime", current.scanTime());

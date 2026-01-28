@@ -214,6 +214,8 @@ public final class ConsoleUi {
       int len = (style.fancy ? 2 : 2) + opt.length();
       if (len > width) width = len;
     }
+    int maxWidth = maxContentWidth();
+    if (maxWidth > 0 && width > maxWidth) width = maxWidth;
     String h = style.unicode ? "─" : "-";
     String v = style.unicode ? "│" : "|";
     String tl = style.unicode ? "┌" : "+";
@@ -274,6 +276,8 @@ public final class ConsoleUi {
   }
 
   private String padRight(String s, int width) {
+    if (s == null) s = "";
+    if (s.length() > width) s = s.substring(0, width);
     if (s.length() >= width) return s;
     StringBuilder sb = new StringBuilder(width);
     sb.append(s);
@@ -305,6 +309,28 @@ public final class ConsoleUi {
   }
 
   private record MenuStyle(boolean ansi, boolean unicode, String bold, String dim, boolean fancy) {
+  }
+
+  private int maxContentWidth() {
+    int cols = terminalCols();
+    if (cols <= 0) return 0;
+    int max = cols - 4;
+    return Math.max(20, max);
+  }
+
+  private int terminalCols() {
+    try {
+      Process p = new ProcessBuilder("sh", "-c", "stty size < /dev/tty").start();
+      byte[] data = p.getInputStream().readAllBytes();
+      p.waitFor();
+      String out = new String(data).trim();
+      String[] parts = out.split("\\s+");
+      if (parts.length >= 2) {
+        return Integer.parseInt(parts[1]);
+      }
+    } catch (Throwable ignored) {
+    }
+    return 80;
   }
 
   private void renderInputLine(String value) {
@@ -343,6 +369,8 @@ public final class ConsoleUi {
       }
     }
     if (footer != null && footer.length() > width) width = footer.length();
+    int maxWidth = maxContentWidth();
+    if (maxWidth > 0 && width > maxWidth) width = maxWidth;
 
     if (lastMenuLines > 0) {
       moveCursorUp(lastMenuLines);
