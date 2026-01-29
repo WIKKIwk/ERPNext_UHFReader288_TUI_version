@@ -255,7 +255,7 @@ public final class ConsoleUi {
     } finally {
       setTerminalRaw(false);
       inputPrompt = null;
-      resetCursorOffset();
+      setCursorFromMenuBottom(3);
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
     }
     return buf.toString();
@@ -305,7 +305,7 @@ public final class ConsoleUi {
     } finally {
       setTerminalRaw(false);
       inputPrompt = null;
-      resetCursorOffset();
+      setCursorFromMenuBottom(3);
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
     }
     return canceled ? null : buf.toString();
@@ -538,6 +538,10 @@ public final class ConsoleUi {
 
   private void resetCursorOffset() {
     cursorFromMenuBottom = 0;
+  }
+
+  private void setCursorFromMenuBottom(int value) {
+    cursorFromMenuBottom = Math.max(0, value);
   }
 
   private void clearBelow() {
