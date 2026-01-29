@@ -168,6 +168,7 @@ relay <value>
 antenna <arg1> <arg2>
 checkant <0|1>
 returnloss <antenna> <freqMHz>
+erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>
 ```
 
 ---
@@ -203,7 +204,38 @@ Use specific ports for faster scans.
 
 ---
 
-## 13) Standalone Bundle (Offline Deployment)
+## 13) ERPNext Push (Optional)
+
+The TUI can **push tag events to ERPNext** using the same payload format as the web demo:
+
+**Endpoint (default):**
+`/api/method/rfidenter.rfidenter.api.ingest_tags`
+
+**Headers:**
+- `Authorization: token <api_key:api_secret>` (from ERP Auth)
+- `x-rfidenter-token: <secret>` (optional)
+
+**Payload:**
+```json
+{
+  "device": "reader-01",
+  "tags": [
+    { "epcId": "...", "memId": "...", "rssi": -45, "antId": 1, "ipAddr": "192.168.1.10", "ts": 1730000000000 }
+  ],
+  "ts": 1730000000000
+}
+```
+
+Configure in **Config/IO → ERP Push** or use:
+```
+erp set url https://your-erp.example.com
+erp set auth api_key:api_secret
+erp enable
+```
+
+---
+
+## 14) Standalone Bundle (Offline Deployment)
 
 Create a **self‑contained** folder for sharing:
 
@@ -234,7 +266,7 @@ Run on another machine:
 
 ---
 
-## 14) Manual Build (Optional)
+## 15) Manual Build (Optional)
 
 ```bash
 javac -encoding UTF-8 -cp lib/CReader.jar -d UhfTuiLinux/out $(find UhfTuiLinux/src -name "*.java")
@@ -243,7 +275,7 @@ java -cp UhfTuiLinux/out:lib/CReader.jar uhf.tui.Main
 
 ---
 
-## 15) Operations & Security (Enterprise Guidance)
+## 16) Operations & Security (Enterprise Guidance)
 
 - **Do not commit** vendor SDKs to public repositories.
 - Restrict subnet scans in production (known VLAN/subnets only).
@@ -252,7 +284,7 @@ java -cp UhfTuiLinux/out:lib/CReader.jar uhf.tui.Main
 
 ---
 
-## 16) Troubleshooting
+## 17) Troubleshooting
 
 **No device found**
 - Confirm same subnet
@@ -268,14 +300,14 @@ java -cp UhfTuiLinux/out:lib/CReader.jar uhf.tui.Main
 
 ---
 
-## 17) Support & Ownership
+## 18) Support & Ownership
 
 This project relies on vendor SDK behavior.  
 For low‑level protocol details or USB‑serial support, request an official Linux `.so` SDK from the vendor.
 
 ---
 
-## 18) License
+## 19) License
 
 This project is licensed under the **Apache License 2.0**.  
 See `LICENSE` for full text.
