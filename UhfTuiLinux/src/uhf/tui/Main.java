@@ -1020,8 +1020,9 @@ public final class Main {
           cfg.baseUrl = url;
           cfg.auth = token;
           saveErpConfig(ctx.erp(), cfg);
-          boolean ok = ui.runWithSpinner("Checking ERP", () -> ctx.erp().testOnce());
-          ui.setStatusMessage(ok ? "ERP check: ok" : "ERP check: failed");
+          final boolean[] ok = {false};
+          ui.runWithSpinner("Checking ERP", () -> ok[0] = ctx.erp().testOnce());
+          ui.setStatusMessage(ok[0] ? "ERP check: ok" : "ERP check: failed");
         }
       }
     }

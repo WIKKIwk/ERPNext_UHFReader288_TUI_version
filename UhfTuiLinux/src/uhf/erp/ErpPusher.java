@@ -206,6 +206,16 @@ public final class ErpPusher {
     if (code < 200 || code >= 300) {
       throw new RuntimeException("ERP HTTP " + code);
     }
+    String body;
+    try {
+      body = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      body = "";
+    }
+    String low = body.toLowerCase();
+    if (low.contains("\"ok\":false") || low.contains("\"ok\": false")) {
+      throw new RuntimeException("ERP response not ok");
+    }
   }
 
   private String buildPayload(List<ErpTagEvent> tags, boolean heartbeat) {
