@@ -168,7 +168,7 @@ relay <value>
 antenna <arg1> <arg2>
 checkant <0|1>
 returnloss <antenna> <freqMHz>
-erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>
+erp status | enable | disable | set <url|token> <value>
 ```
 
 ---
@@ -229,7 +229,7 @@ The TUI can **push tag events to ERPNext** using the same payload format as the 
 Configure in **Config/IO → ERP Push** or use:
 ```
 erp set url https://your-erp.example.com
-erp set auth api_key:api_secret
+erp set token api_key:api_secret
 erp enable
 ```
 

@@ -308,9 +308,9 @@ public final class Main {
       ctx.ui().println(r.ok() ? "Beep set: " + v : "SetBeepNotification failed: " + r.code());
     });
 
-    registry.register("erp", "erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>", (args, ctx) -> {
+    registry.register("erp", "erp status | enable | disable | set <url|token> <value>", (args, ctx) -> {
       if (args.size() < 2) {
-        ctx.ui().println("Usage: erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>");
+        ctx.ui().println("Usage: erp status | enable | disable | set <url|token> <value>");
         return;
       }
       String sub = args.get(1).toLowerCase();
@@ -333,19 +333,16 @@ public final class Main {
       }
       if (sub.equals("set")) {
         if (args.size() < 4) {
-          ctx.ui().println("Usage: erp set <url|auth|secret|device|endpoint> <value>");
+          ctx.ui().println("Usage: erp set <url|token> <value>");
           return;
         }
         String key = args.get(2).toLowerCase();
         String val = args.get(3);
         switch (key) {
           case "url" -> cfg.baseUrl = val;
-          case "auth" -> cfg.auth = val;
-          case "secret" -> cfg.secret = val;
-          case "device" -> cfg.device = val;
-          case "endpoint" -> cfg.endpoint = val;
+          case "token", "auth" -> cfg.auth = val;
           default -> {
-            ctx.ui().println("Unknown key. Use url|auth|secret|device|endpoint");
+            ctx.ui().println("Unknown key. Use url|token");
             return;
           }
         }
@@ -353,7 +350,7 @@ public final class Main {
         ctx.ui().println("ERP config updated.");
         return;
       }
-      ctx.ui().println("Usage: erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>");
+      ctx.ui().println("Usage: erp status | enable | disable | set <url|token> <value>");
     });
 
     registry.register("gpio", "gpio get | gpio set <mask>", (args, ctx) -> {
@@ -975,13 +972,13 @@ public final class Main {
   }
 
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Status", "Enable", "Disable", "Set URL", "Set Auth", "Set Secret", "Set Device", "Set Endpoint", "Back"};
+    String[] options = {"Status", "Enable", "Disable", "Set URL", "Set Token", "Back"};
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("ERP Push", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 8) return;
+      if (sel == 5) return;
       ErpConfig cfg = copyErpConfig(ctx.erp().config());
       switch (sel) {
         case 0 -> ui.showLines("ERP Status", List.of(
@@ -1010,30 +1007,9 @@ public final class Main {
           }
         }
         case 4 -> {
-          String v = askString(ui, "ERP Auth (api_key:api_secret)", safe(cfg.auth));
+          String v = askString(ui, "ERP Token (api_key:api_secret)", safe(cfg.auth));
           if (v != null) {
             cfg.auth = v;
-            saveErpConfig(ctx.erp(), cfg);
-          }
-        }
-        case 5 -> {
-          String v = askString(ui, "ERP Secret (optional)", safe(cfg.secret));
-          if (v != null) {
-            cfg.secret = v;
-            saveErpConfig(ctx.erp(), cfg);
-          }
-        }
-        case 6 -> {
-          String v = askString(ui, "Device name", safe(cfg.device));
-          if (v != null) {
-            cfg.device = v;
-            saveErpConfig(ctx.erp(), cfg);
-          }
-        }
-        case 7 -> {
-          String v = askString(ui, "ERP Endpoint", safe(cfg.endpoint));
-          if (v != null) {
-            cfg.endpoint = v;
             saveErpConfig(ctx.erp(), cfg);
           }
         }
