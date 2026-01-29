@@ -228,7 +228,7 @@ public final class ConsoleUi {
     StringBuilder buf = new StringBuilder();
     try {
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
-      renderInputLine(buf.toString());
+      renderInputMenuLine(buf.toString());
       while (true) {
         int ch = System.in.read();
         if (ch == -1) break;
@@ -243,12 +243,12 @@ public final class ConsoleUi {
         }
         if (ch == 127 || ch == 8) {
           if (!buf.isEmpty()) buf.deleteCharAt(buf.length() - 1);
-          renderInputLine(buf.toString());
+          renderInputMenuLine(buf.toString());
           continue;
         }
         if (ch >= 32) {
           buf.append((char) ch);
-          renderInputLine(buf.toString());
+          renderInputMenuLine(buf.toString());
         }
       }
     } catch (Throwable ignored) {
@@ -273,7 +273,7 @@ public final class ConsoleUi {
     boolean canceled = false;
     try {
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
-      renderInputLine(buf.toString());
+      renderInputMenuLine(buf.toString());
       while (true) {
         int ch = System.in.read();
         if (ch == -1) break;
@@ -293,12 +293,12 @@ public final class ConsoleUi {
         }
         if (ch == 127 || ch == 8) {
           if (!buf.isEmpty()) buf.deleteCharAt(buf.length() - 1);
-          renderInputLine(buf.toString());
+          renderInputMenuLine(buf.toString());
           continue;
         }
         if (ch >= 32) {
           buf.append((char) ch);
-          renderInputLine(buf.toString());
+          renderInputMenuLine(buf.toString());
         }
       }
     } catch (Throwable ignored) {
@@ -626,6 +626,14 @@ public final class ConsoleUi {
     System.out.print("\r");
     System.out.print("\033[" + cursorCol + "C");
     System.out.flush();
+  }
+
+  private void renderInputMenuLine(String value) {
+    if (lastMenuOptions == null || lastMenuLabel == null) return;
+    String prompt = inputPrompt == null ? "" : inputPrompt;
+    inputPrompt = prompt + value;
+    renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    inputPrompt = prompt;
   }
 
   private void renderMessageBox(String title, List<String> lines, String footer) {
