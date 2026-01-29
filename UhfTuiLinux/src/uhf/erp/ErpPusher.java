@@ -21,6 +21,9 @@ public final class ErpPusher {
   private ScheduledFuture<?> heartbeatTask;
   private volatile long backoffUntil = 0;
   private volatile int failCount = 0;
+  private volatile long lastOkAt = 0;
+  private volatile long lastErrAt = 0;
+  private volatile String lastErrMsg = "";
 
   public ErpPusher(ErpConfig cfg) {
     this.cfg = cfg == null ? new ErpConfig() : cfg;
@@ -35,6 +38,22 @@ public final class ErpPusher {
 
   public ErpConfig config() {
     return cfg;
+  }
+
+  public boolean isEnabled() {
+    return enabled();
+  }
+
+  public long lastOkAt() {
+    return lastOkAt;
+  }
+
+  public long lastErrAt() {
+    return lastErrAt;
+  }
+
+  public String lastErrMsg() {
+    return lastErrMsg == null ? "" : lastErrMsg;
   }
 
   public void enqueue(ErpTagEvent evt) {
@@ -120,8 +139,13 @@ public final class ErpPusher {
       postTags(batch, false);
       failCount = 0;
       backoffUntil = 0;
+      lastOkAt = System.currentTimeMillis();
+      lastErrAt = 0;
+      lastErrMsg = "";
     } catch (Exception e) {
       failCount++;
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = e.getMessage();
       long backoff = Math.min(30000, 500L * (1L << Math.min(10, failCount)));
       backoffUntil = System.currentTimeMillis() + backoff;
       for (int i = batch.size() - 1; i >= 0; i--) {
@@ -136,6 +160,9 @@ public final class ErpPusher {
     if (!enabled()) return;
     if (cfg.heartbeatMs <= 0) return;
     postTags(List.of(), true);
+    lastOkAt = System.currentTimeMillis();
+    lastErrAt = 0;
+    lastErrMsg = "";
   }
 
   private void postTags(List<ErpTagEvent> tags, boolean heartbeat) throws Exception {

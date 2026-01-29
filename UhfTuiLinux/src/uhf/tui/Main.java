@@ -656,7 +656,7 @@ public final class Main {
     CommandContext ctx = new CommandContext(reader, ui, erp);
     MenuId forwardTarget = null;
     while (true) {
-      updateStatus(ui, reader);
+      updateStatus(ui, reader, erp);
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
           "Main [" + status + "]",
@@ -740,7 +740,7 @@ public final class Main {
 
   private static void menuConnection(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Connection", new String[]{"Connect", "Disconnect", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -765,7 +765,7 @@ public final class Main {
 
   private static void menuScan(ConsoleUi ui, CommandContext ctx) {
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Scan", new String[]{"LAN auto-scan", "USB auto-scan", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -831,7 +831,7 @@ public final class Main {
 
   private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Once (timed)", "Params (view)", "Params (set)", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -871,7 +871,7 @@ public final class Main {
         "Write EPC ID", "Write EPC by TID", "Lock", "Kill", "Back"
     };
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Tag Ops", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -937,7 +937,7 @@ public final class Main {
         "Back"
     };
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -981,7 +981,7 @@ public final class Main {
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
     String[] options = {"Status", "Enable", "Disable", "Set URL", "Back"};
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("ERP Push", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1028,7 +1028,7 @@ public final class Main {
   private static void menuAntennaPower(ConsoleUi ui, CommandContext ctx) {
     String[] options = {"Set all", "Set per-antenna", "Get", "Back"};
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Per-Antenna Power", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1085,7 +1085,7 @@ public final class Main {
   private static void menuAntennaCheck(ConsoleUi ui, CommandContext ctx) {
     String[] options = {"Enable (1)", "Disable (0)", "Back"};
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Antenna Check", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1103,7 +1103,7 @@ public final class Main {
 
   private static void menuReturnLoss(ConsoleUi ui, CommandContext ctx) {
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Return Loss", new String[]{"Measure", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1133,7 +1133,7 @@ public final class Main {
   private static void menuWritePower(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {"Set (normal)", "Set (high)", "Get", "Back"};
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Write Power", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1157,7 +1157,7 @@ public final class Main {
 
   private static void menuInfo(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
-      updateStatus(ui, ctx.reader());
+      updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("Info", new String[]{"Reader info", "Serial", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
@@ -1451,8 +1451,23 @@ public final class Main {
     return sel;
   }
 
-  private static void updateStatus(ConsoleUi ui, ReaderClient reader) {
-    ui.setStatusBase("Status: " + (reader.isConnected() ? "connected" : "disconnected"));
+  private static void updateStatus(ConsoleUi ui, ReaderClient reader, ErpPusher erp) {
+    String base = "Status: " + (reader.isConnected() ? "connected" : "disconnected");
+    String erpState = erpStatus(erp);
+    ui.setStatusBase(erpState.isEmpty() ? base : base + " | " + erpState);
+  }
+
+  private static String erpStatus(ErpPusher erp) {
+    if (erp == null) return "";
+    if (!erp.isEnabled()) return "ERP: off";
+    long now = System.currentTimeMillis();
+    long ok = erp.lastOkAt();
+    long err = erp.lastErrAt();
+    if (err > ok) return "ERP: error";
+    if (ok == 0) return "ERP: waiting";
+    long age = now - ok;
+    if (age <= 60000) return "ERP: connected";
+    return "ERP: stale";
   }
 
   private enum ShellExit {
