@@ -1532,7 +1532,8 @@ public final class Main {
 
   private static String erpStatus(ErpPusher erp) {
     if (erp == null) return "";
-    if (!erp.isEnabled()) return "ERP: inactive";
+    if (erp.config() == null || erp.config().baseUrl == null || erp.config().baseUrl.isBlank()) return "ERP: inactive";
+    if (!erp.isEnabled()) return "ERP: configured";
     long now = System.currentTimeMillis();
     long ok = erp.lastOkAt();
     long err = erp.lastErrAt();
