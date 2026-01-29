@@ -1032,13 +1032,13 @@ public final class Main {
   }
 
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Status", "Enable", "Disable", "Set URL", "Back"};
+    String[] options = {"Status", "Enable", "Disable", "Set URL", "Test (fake)", "Back"};
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("ERP Push", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 4) return;
+      if (sel == 5) return;
       ErpConfig cfg = copyErpConfig(ctx.erp().config());
       switch (sel) {
         case 0 -> ui.showLines("ERP Status", List.of(
@@ -1080,6 +1080,17 @@ public final class Main {
           } else {
             String msg = ctx.erp().lastErrMsg();
             ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP check: failed" : "ERP check: failed (" + msg + ")");
+          }
+        }
+        case 4 -> {
+          int count = askInt(ui, "Fake tags count", 5);
+          final boolean[] ok = {false};
+          ui.runWithSpinner("Sending test tags", () -> ok[0] = ctx.erp().pushTestTags(count));
+          if (ok[0]) {
+            ui.setStatusMessage("ERP test tags: sent");
+          } else {
+            String msg = ctx.erp().lastErrMsg();
+            ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP test tags: failed" : "ERP test tags: failed (" + msg + ")");
           }
         }
       }

@@ -93,6 +93,37 @@ public final class ErpPusher {
     }
   }
 
+  public boolean pushTestTags(int count) {
+    if (cfg == null || safe(cfg.baseUrl).isEmpty()) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = "ERP URL not set";
+      return false;
+    }
+    if (cfg.endpoint == null || cfg.endpoint.isBlank()) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = "ERP endpoint not set";
+      return false;
+    }
+    int n = Math.max(1, Math.min(count, 200));
+    List<ErpTagEvent> tags = new ArrayList<>();
+    long now = System.currentTimeMillis();
+    for (int i = 0; i < n; i++) {
+      String epc = "TEST" + Long.toHexString(now + i);
+      tags.add(new ErpTagEvent(epc, "TEST", -40, 1, "0.0.0.0", now));
+    }
+    try {
+      postTags(tags, false);
+      lastOkAt = System.currentTimeMillis();
+      lastErrAt = 0;
+      lastErrMsg = "";
+      return true;
+    } catch (Exception e) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = e.getMessage();
+      return false;
+    }
+  }
+
   public void enqueue(ErpTagEvent evt) {
     if (evt == null) return;
     if (!enabled()) return;
