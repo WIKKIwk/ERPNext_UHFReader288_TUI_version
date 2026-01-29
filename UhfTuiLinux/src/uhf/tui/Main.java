@@ -308,6 +308,54 @@ public final class Main {
       ctx.ui().println(r.ok() ? "Beep set: " + v : "SetBeepNotification failed: " + r.code());
     });
 
+    registry.register("erp", "erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>", (args, ctx) -> {
+      if (args.size() < 2) {
+        ctx.ui().println("Usage: erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>");
+        return;
+      }
+      String sub = args.get(1).toLowerCase();
+      ErpConfig cfg = copyErpConfig(ctx.erp().config());
+      if (sub.equals("status")) {
+        ctx.ui().println("ERP enabled=" + cfg.enabled + " url=" + cfg.baseUrl + " endpoint=" + cfg.endpoint);
+        return;
+      }
+      if (sub.equals("enable")) {
+        cfg.enabled = true;
+        saveErpConfig(ctx.erp(), cfg);
+        ctx.ui().println("ERP push enabled.");
+        return;
+      }
+      if (sub.equals("disable")) {
+        cfg.enabled = false;
+        saveErpConfig(ctx.erp(), cfg);
+        ctx.ui().println("ERP push disabled.");
+        return;
+      }
+      if (sub.equals("set")) {
+        if (args.size() < 4) {
+          ctx.ui().println("Usage: erp set <url|auth|secret|device|endpoint> <value>");
+          return;
+        }
+        String key = args.get(2).toLowerCase();
+        String val = args.get(3);
+        switch (key) {
+          case "url" -> cfg.baseUrl = val;
+          case "auth" -> cfg.auth = val;
+          case "secret" -> cfg.secret = val;
+          case "device" -> cfg.device = val;
+          case "endpoint" -> cfg.endpoint = val;
+          default -> {
+            ctx.ui().println("Unknown key. Use url|auth|secret|device|endpoint");
+            return;
+          }
+        }
+        saveErpConfig(ctx.erp(), cfg);
+        ctx.ui().println("ERP config updated.");
+        return;
+      }
+      ctx.ui().println("Usage: erp status | enable | disable | set <url|auth|secret|device|endpoint> <value>");
+    });
+
     registry.register("gpio", "gpio get | gpio set <mask>", (args, ctx) -> {
       if (args.size() < 2) {
         ctx.ui().println("Usage: gpio get | gpio set <mask>");
@@ -881,6 +929,7 @@ public final class Main {
         "GPIO Set",
         "Relay",
         "Antenna",
+        "ERP Push",
         "Back"
     };
     while (true) {
@@ -888,7 +937,7 @@ public final class Main {
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 11) return;
+      if (sel == 12) return;
       switch (sel) {
         case 0 -> {
           int p = selectPowerValue(ui, "RF Power", 30);
@@ -920,6 +969,74 @@ public final class Main {
         case 10 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, "Arg1", 0)),
             String.valueOf(askInt(ui, "Arg2", 0))), ctx);
+        case 11 -> menuErp(ui, ctx);
+      }
+    }
+  }
+
+  private static void menuErp(ConsoleUi ui, CommandContext ctx) {
+    String[] options = {"Status", "Enable", "Disable", "Set URL", "Set Auth", "Set Secret", "Set Device", "Set Endpoint", "Back"};
+    while (true) {
+      updateStatus(ui, ctx.reader());
+      int sel = ui.selectOption("ERP Push", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 8) return;
+      ErpConfig cfg = copyErpConfig(ctx.erp().config());
+      switch (sel) {
+        case 0 -> ui.showLines("ERP Status", List.of(
+            "enabled=" + cfg.enabled,
+            "url=" + safe(cfg.baseUrl),
+            "endpoint=" + safe(cfg.endpoint),
+            "device=" + safe(cfg.device),
+            "auth=" + (cfg.auth == null || cfg.auth.isBlank() ? "(empty)" : "***"),
+            "secret=" + (cfg.secret == null || cfg.secret.isBlank() ? "(empty)" : "***")
+        ));
+        case 1 -> {
+          cfg.enabled = true;
+          saveErpConfig(ctx.erp(), cfg);
+          ui.setStatusMessage("ERP push enabled.");
+        }
+        case 2 -> {
+          cfg.enabled = false;
+          saveErpConfig(ctx.erp(), cfg);
+          ui.setStatusMessage("ERP push disabled.");
+        }
+        case 3 -> {
+          String v = askString(ui, "ERP URL", safe(cfg.baseUrl));
+          if (v != null) {
+            cfg.baseUrl = v;
+            saveErpConfig(ctx.erp(), cfg);
+          }
+        }
+        case 4 -> {
+          String v = askString(ui, "ERP Auth (api_key:api_secret)", safe(cfg.auth));
+          if (v != null) {
+            cfg.auth = v;
+            saveErpConfig(ctx.erp(), cfg);
+          }
+        }
+        case 5 -> {
+          String v = askString(ui, "ERP Secret (optional)", safe(cfg.secret));
+          if (v != null) {
+            cfg.secret = v;
+            saveErpConfig(ctx.erp(), cfg);
+          }
+        }
+        case 6 -> {
+          String v = askString(ui, "Device name", safe(cfg.device));
+          if (v != null) {
+            cfg.device = v;
+            saveErpConfig(ctx.erp(), cfg);
+          }
+        }
+        case 7 -> {
+          String v = askString(ui, "ERP Endpoint", safe(cfg.endpoint));
+          if (v != null) {
+            cfg.endpoint = v;
+            saveErpConfig(ctx.erp(), cfg);
+          }
+        }
       }
     }
   }
@@ -1380,8 +1497,38 @@ public final class Main {
   }
 
   private static ErpConfig loadErpConfig() {
-    Path file = Path.of("UhfTuiLinux", "erp.properties");
+    Path file = erpConfigPath();
     return ErpConfig.load(file);
+  }
+
+  private static void saveErpConfig(ErpPusher erp, ErpConfig cfg) {
+    if (erp == null || cfg == null) return;
+    cfg.save(erpConfigPath());
+    erp.applyConfig(cfg);
+  }
+
+  private static ErpConfig copyErpConfig(ErpConfig src) {
+    ErpConfig c = new ErpConfig();
+    if (src == null) return c;
+    c.enabled = src.enabled;
+    c.baseUrl = safe(src.baseUrl);
+    c.auth = safe(src.auth);
+    c.secret = safe(src.secret);
+    c.device = safe(src.device);
+    c.endpoint = safe(src.endpoint);
+    c.batchMs = src.batchMs;
+    c.maxBatch = src.maxBatch;
+    c.maxQueue = src.maxQueue;
+    c.heartbeatMs = src.heartbeatMs;
+    return c;
+  }
+
+  private static Path erpConfigPath() {
+    return Path.of("UhfTuiLinux", "erp.properties");
+  }
+
+  private static String safe(String s) {
+    return s == null ? "" : s.trim();
   }
 
   private record RegionOption(String label, int band, double startMhz, double stepMhz, int count) {
