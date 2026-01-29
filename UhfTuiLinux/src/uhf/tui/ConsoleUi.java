@@ -22,6 +22,7 @@ public final class ConsoleUi {
   private int lastRenderedWidth = 0;
   private String statusBase;
   private String statusMessage;
+  private String headerRight;
   private String inputPrompt;
   private int cachedCols = 80;
   private long cachedColsAt = 0L;
@@ -406,6 +407,43 @@ public final class ConsoleUi {
     }
   }
 
+  public void setHeaderRight(String message) {
+    headerRight = message == null ? "" : message;
+    if (menuMode && supportsAnsi() && lastMenuOptions != null) {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+  }
+
+  public boolean runWithSpinner(String message, Runnable task) {
+    if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
+      task.run();
+      return true;
+    }
+    final boolean[] done = {false};
+    final boolean[] ok = {true};
+    Thread t = new Thread(() -> {
+      try {
+        task.run();
+      } catch (Throwable t1) {
+        ok[0] = false;
+      } finally {
+        done[0] = true;
+      }
+    });
+    t.setDaemon(true);
+    t.start();
+    String[] spin = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
+    int i = 0;
+    while (!done[0]) {
+      setStatusMessage(message + " " + spin[i++ % spin.length]);
+      try {
+        Thread.sleep(120);
+      } catch (InterruptedException ignored) {
+      }
+    }
+    return ok[0];
+  }
+
   public void exitMenuMode() {
     menuMode = false;
     resetMenuState();
@@ -416,7 +454,10 @@ public final class ConsoleUi {
     String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
     String status = combineStatus();
     String input = inputPrompt == null ? "" : inputPrompt;
-    int width = Math.max(label.length(), hint.length());
+    String header = label == null ? "" : label;
+    String right = headerRight == null ? "" : headerRight;
+    int width = Math.max(header.length(), hint.length());
+    if (!right.isEmpty()) width = Math.max(width, right.length());
     if (!status.isEmpty()) width = Math.max(width, status.length());
     if (!input.isEmpty()) width = Math.max(width, input.length());
     for (String opt : options) {
@@ -450,8 +491,24 @@ public final class ConsoleUi {
     lastMenuIndex = idx;
     lastMenuWidth = width;
 
+    String headerLine;
+    if (right.isEmpty()) {
+      headerLine = padRight(header, width);
+    } else {
+      String left = header;
+      String r = right;
+      int gap = width - left.length() - r.length();
+      if (gap < 1) {
+        int maxRight = Math.max(0, width - left.length() - 1);
+        if (r.length() > maxRight) r = r.substring(0, maxRight);
+        gap = Math.max(1, width - left.length() - r.length());
+      }
+      headerLine = left + repeat(" ", gap) + r;
+      headerLine = padRight(headerLine, width);
+    }
+
     System.out.print(clearLine(tl + repeat(h, width + 2) + tr) + "\n");
-    System.out.print(clearLine(v + " " + applyStyle(padRight(label, width), style.bold) + " " + v) + "\n");
+    System.out.print(clearLine(v + " " + applyStyle(headerLine, style.bold) + " " + v) + "\n");
     System.out.print(clearLine(jm + repeat(h, width + 2) + jmr) + "\n");
     for (int i = 0; i < options.length; i++) {
       String prefix = (i == idx) ? (style.unicode ? "▶ " : "> ") : "  ";

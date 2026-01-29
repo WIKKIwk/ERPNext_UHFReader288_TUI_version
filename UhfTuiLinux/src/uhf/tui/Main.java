@@ -1020,6 +1020,8 @@ public final class Main {
           cfg.baseUrl = url;
           cfg.auth = token;
           saveErpConfig(ctx.erp(), cfg);
+          boolean ok = ui.runWithSpinner("Checking ERP", () -> ctx.erp().testOnce());
+          ui.setStatusMessage(ok ? "ERP check: ok" : "ERP check: failed");
         }
       }
     }
@@ -1452,14 +1454,15 @@ public final class Main {
   }
 
   private static void updateStatus(ConsoleUi ui, ReaderClient reader, ErpPusher erp) {
-    String base = "Status: " + (reader.isConnected() ? "connected" : "disconnected");
+    String readerState = reader.isConnected() ? "UHF: connected" : "UHF: disconnected";
     String erpState = erpStatus(erp);
-    ui.setStatusBase(erpState.isEmpty() ? base : base + " | " + erpState);
+    ui.setHeaderRight(erpState.isEmpty() ? readerState : readerState + " | " + erpState);
+    ui.setStatusBase("");
   }
 
   private static String erpStatus(ErpPusher erp) {
     if (erp == null) return "";
-    if (!erp.isEnabled()) return "ERP: off";
+    if (!erp.isEnabled()) return "ERP: inactive";
     long now = System.currentTimeMillis();
     long ok = erp.lastOkAt();
     long err = erp.lastErrAt();

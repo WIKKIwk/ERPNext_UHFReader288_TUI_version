@@ -56,6 +56,18 @@ public final class ErpPusher {
     return lastErrMsg == null ? "" : lastErrMsg;
   }
 
+  public boolean testOnce() {
+    if (!enabled()) return false;
+    try {
+      sendHeartbeat();
+      return true;
+    } catch (Exception e) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = e.getMessage();
+      return false;
+    }
+  }
+
   public void enqueue(ErpTagEvent evt) {
     if (evt == null) return;
     if (!enabled()) return;
