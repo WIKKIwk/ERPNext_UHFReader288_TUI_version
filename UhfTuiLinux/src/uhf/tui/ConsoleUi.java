@@ -261,6 +261,56 @@ public final class ConsoleUi {
     return buf.toString();
   }
 
+  public String readLineInMenuOrBack(String prompt) {
+    if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
+      return readLine(prompt);
+    }
+    if (!setTerminalRaw(true)) {
+      return readLine(prompt);
+    }
+    inputPrompt = prompt == null ? "" : prompt;
+    StringBuilder buf = new StringBuilder();
+    boolean canceled = false;
+    try {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+      renderInputLine(buf.toString());
+      while (true) {
+        int ch = System.in.read();
+        if (ch == -1) break;
+        if (ch == '\r' || ch == '\n') break;
+        if (ch == 27) { // ESC or arrows
+          int ch1 = System.in.read();
+          if (ch1 == '[') {
+            int ch2 = System.in.read();
+            if (ch2 == 'D') { // left
+              canceled = true;
+              break;
+            }
+            continue;
+          }
+          canceled = true;
+          break;
+        }
+        if (ch == 127 || ch == 8) {
+          if (!buf.isEmpty()) buf.deleteCharAt(buf.length() - 1);
+          renderInputLine(buf.toString());
+          continue;
+        }
+        if (ch >= 32) {
+          buf.append((char) ch);
+          renderInputLine(buf.toString());
+        }
+      }
+    } catch (Throwable ignored) {
+    } finally {
+      setTerminalRaw(false);
+      inputPrompt = null;
+      resetCursorOffset();
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+    return canceled ? null : buf.toString();
+  }
+
   public void showLines(String title, List<String> lines) {
     if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
       println(title);

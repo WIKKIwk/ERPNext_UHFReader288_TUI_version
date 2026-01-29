@@ -308,9 +308,9 @@ public final class Main {
       ctx.ui().println(r.ok() ? "Beep set: " + v : "SetBeepNotification failed: " + r.code());
     });
 
-    registry.register("erp", "erp status | enable | disable | set <url|token> <value>", (args, ctx) -> {
+    registry.register("erp", "erp status | enable | disable | set <url> <token>", (args, ctx) -> {
       if (args.size() < 2) {
-        ctx.ui().println("Usage: erp status | enable | disable | set <url|token> <value>");
+        ctx.ui().println("Usage: erp status | enable | disable | set <url> <token>");
         return;
       }
       String sub = args.get(1).toLowerCase();
@@ -332,25 +332,32 @@ public final class Main {
         return;
       }
       if (sub.equals("set")) {
-        if (args.size() < 4) {
-          ctx.ui().println("Usage: erp set <url|token> <value>");
+        String url;
+        String token;
+        if (args.size() == 3) {
+          url = args.get(2);
+          token = ctx.ui().readLine("ERP Token (api_key:api_secret) [" + safe(cfg.auth) + "]: ");
+          if (token == null) return;
+          if (token.isBlank()) token = cfg.auth;
+        } else if (args.size() >= 4 && "url".equalsIgnoreCase(args.get(2))) {
+          url = args.get(3);
+          token = ctx.ui().readLine("ERP Token (api_key:api_secret) [" + safe(cfg.auth) + "]: ");
+          if (token == null) return;
+          if (token.isBlank()) token = cfg.auth;
+        } else if (args.size() >= 4) {
+          url = args.get(2);
+          token = args.get(3);
+        } else {
+          ctx.ui().println("Usage: erp set <url> <token>");
           return;
         }
-        String key = args.get(2).toLowerCase();
-        String val = args.get(3);
-        switch (key) {
-          case "url" -> cfg.baseUrl = val;
-          case "token", "auth" -> cfg.auth = val;
-          default -> {
-            ctx.ui().println("Unknown key. Use url|token");
-            return;
-          }
-        }
+        cfg.baseUrl = url;
+        if (token != null) cfg.auth = token;
         saveErpConfig(ctx.erp(), cfg);
         ctx.ui().println("ERP config updated.");
         return;
       }
-      ctx.ui().println("Usage: erp status | enable | disable | set <url|token> <value>");
+      ctx.ui().println("Usage: erp status | enable | disable | set <url> <token>");
     });
 
     registry.register("gpio", "gpio get | gpio set <mask>", (args, ctx) -> {
@@ -972,13 +979,13 @@ public final class Main {
   }
 
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Status", "Enable", "Disable", "Set URL", "Set Token", "Back"};
+    String[] options = {"Status", "Enable", "Disable", "Set URL", "Back"};
     while (true) {
       updateStatus(ui, ctx.reader());
       int sel = ui.selectOption("ERP Push", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 5) return;
+      if (sel == 4) return;
       ErpConfig cfg = copyErpConfig(ctx.erp().config());
       switch (sel) {
         case 0 -> ui.showLines("ERP Status", List.of(
@@ -1000,18 +1007,13 @@ public final class Main {
           ui.setStatusMessage("ERP push disabled.");
         }
         case 3 -> {
-          String v = askString(ui, "ERP URL", safe(cfg.baseUrl));
-          if (v != null) {
-            cfg.baseUrl = v;
-            saveErpConfig(ctx.erp(), cfg);
-          }
-        }
-        case 4 -> {
-          String v = askString(ui, "ERP Token (api_key:api_secret)", safe(cfg.auth));
-          if (v != null) {
-            cfg.auth = v;
-            saveErpConfig(ctx.erp(), cfg);
-          }
+          String url = askStringOrBack(ui, "ERP URL", safe(cfg.baseUrl));
+          if (url == null) break;
+          String token = askStringOrBack(ui, "ERP Token (api_key:api_secret)", safe(cfg.auth));
+          if (token == null) break;
+          cfg.baseUrl = url;
+          cfg.auth = token;
+          saveErpConfig(ctx.erp(), cfg);
         }
       }
     }
@@ -1189,6 +1191,13 @@ public final class Main {
   private static String askString(ConsoleUi ui, String label, String def) {
     String line = ui.readLineInMenu(label + " [" + def + "]: ");
     if (line == null || line.isBlank()) return def;
+    return line;
+  }
+
+  private static String askStringOrBack(ConsoleUi ui, String label, String def) {
+    String line = ui.readLineInMenuOrBack(label + " [" + def + "]: ");
+    if (line == null) return null;
+    if (line.isBlank()) return def;
     return line;
   }
 
