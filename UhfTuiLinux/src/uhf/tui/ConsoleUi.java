@@ -616,7 +616,8 @@ public final class ConsoleUi {
     if (visible.length() > lastMenuWidth) {
       visible = visible.substring(visible.length() - lastMenuWidth);
     }
-    moveCursorUp(3);
+    int move = cursorFromMenuBottom == 0 ? 3 : cursorFromMenuBottom;
+    moveCursorUp(move);
     cursorFromMenuBottom = 3;
     System.out.print("\r");
     System.out.print("\033[2K");

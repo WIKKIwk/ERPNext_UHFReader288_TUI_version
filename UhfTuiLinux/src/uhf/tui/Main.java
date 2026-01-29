@@ -1007,7 +1007,13 @@ public final class Main {
           ui.setStatusMessage("ERP push disabled.");
         }
         case 3 -> {
-          String url = askStringOrBack(ui, "ERP URL", safe(cfg.baseUrl));
+          String url;
+          while (true) {
+            url = askStringOrBack(ui, "ERP URL", safe(cfg.baseUrl));
+            if (url == null) break;
+            if (!url.isBlank()) break;
+            ui.setStatusMessage("ERP URL required.");
+          }
           if (url == null) break;
           String token = askStringOrBack(ui, "ERP Token (api_key:api_secret)", safe(cfg.auth));
           if (token == null) break;
