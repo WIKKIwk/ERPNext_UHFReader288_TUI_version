@@ -57,9 +57,34 @@ public final class ErpPusher {
   }
 
   public boolean testOnce() {
-    if (!enabled()) return false;
+    if (cfg == null || safe(cfg.baseUrl).isEmpty()) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = "ERP URL not set";
+      return false;
+    }
+    String base = safe(cfg.baseUrl);
+    String auth = normalizeAuth(cfg.auth);
     try {
-      sendHeartbeat();
+      int pingCode = request(joinUrl(base, "/api/method/rfidenter.rfidenter.api.ping"), "GET", auth, null);
+      if (pingCode < 200 || pingCode >= 300) {
+        lastErrAt = System.currentTimeMillis();
+        lastErrMsg = "ERP ping HTTP " + pingCode;
+        return false;
+      }
+      if (auth.isEmpty()) {
+        lastErrAt = System.currentTimeMillis();
+        lastErrMsg = "ERP token missing";
+        return false;
+      }
+      int authCode = request(joinUrl(base, "/api/method/rfidenter.rfidenter.api.list_agents"), "POST", auth, "{}");
+      if (authCode < 200 || authCode >= 300) {
+        lastErrAt = System.currentTimeMillis();
+        lastErrMsg = "ERP auth HTTP " + authCode;
+        return false;
+      }
+      lastOkAt = System.currentTimeMillis();
+      lastErrAt = 0;
+      lastErrMsg = "";
       return true;
     } catch (Exception e) {
       lastErrAt = System.currentTimeMillis();
@@ -179,40 +204,15 @@ public final class ErpPusher {
 
   private void postTags(List<ErpTagEvent> tags, boolean heartbeat) throws Exception {
     String url = joinUrl(cfg.baseUrl, cfg.endpoint);
-    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-    conn.setRequestMethod("POST");
-    conn.setConnectTimeout(5000);
-    conn.setReadTimeout(8000);
-    conn.setDoOutput(true);
-    conn.setRequestProperty("Content-Type", "application/json");
-
-    String auth = safe(cfg.auth);
-    if (!auth.isEmpty()) {
-      String val = auth.toLowerCase().startsWith("token ") ? auth : "token " + auth;
-      conn.setRequestProperty("Authorization", val);
-    }
-    String secret = safe(cfg.secret);
-    if (!secret.isEmpty()) {
-      conn.setRequestProperty("x-rfidenter-token", secret);
-    }
-
+    String auth = normalizeAuth(cfg.auth);
     String payload = buildPayload(tags, heartbeat);
-    byte[] body = payload.getBytes(StandardCharsets.UTF_8);
-    conn.setFixedLengthStreamingMode(body.length);
-    try (OutputStream out = conn.getOutputStream()) {
-      out.write(body);
-    }
+    HttpURLConnection conn = requestWithBody(url, "POST", auth, payload);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new RuntimeException("ERP HTTP " + code);
     }
-    String body;
-    try {
-      body = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (Exception e) {
-      body = "";
-    }
-    String low = body.toLowerCase();
+    String resp = readBody(conn);
+    String low = resp.toLowerCase();
     if (low.contains("\"ok\":false") || low.contains("\"ok\": false")) {
       throw new RuntimeException("ERP response not ok");
     }
@@ -247,6 +247,64 @@ public final class ErpPusher {
     if (b.endsWith("/")) b = b.substring(0, b.length() - 1);
     if (!p.startsWith("/")) p = "/" + p;
     return b + p;
+  }
+
+  private static String normalizeAuth(String auth) {
+    String a = safe(auth);
+    if (a.isEmpty()) return "";
+    return a.toLowerCase().startsWith("token ") ? a : "token " + a;
+  }
+
+  private int request(String url, String method, String authHeader, String body) throws Exception {
+    HttpURLConnection conn = body == null
+        ? requestNoBody(url, method, authHeader)
+        : requestWithBody(url, method, authHeader, body);
+    return conn.getResponseCode();
+  }
+
+  private HttpURLConnection requestNoBody(String url, String method, String authHeader) throws Exception {
+    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+    conn.setRequestMethod(method);
+    conn.setConnectTimeout(5000);
+    conn.setReadTimeout(8000);
+    if (authHeader != null && !authHeader.isEmpty()) {
+      conn.setRequestProperty("Authorization", authHeader);
+    }
+    return conn;
+  }
+
+  private HttpURLConnection requestWithBody(String url, String method, String authHeader, String body) throws Exception {
+    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+    conn.setRequestMethod(method);
+    conn.setConnectTimeout(5000);
+    conn.setReadTimeout(8000);
+    conn.setDoOutput(true);
+    conn.setRequestProperty("Content-Type", "application/json");
+    if (authHeader != null && !authHeader.isEmpty()) {
+      conn.setRequestProperty("Authorization", authHeader);
+    }
+    String secret = safe(cfg.secret);
+    if (!secret.isEmpty()) {
+      conn.setRequestProperty("x-rfidenter-token", secret);
+    }
+    byte[] bytes = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
+    conn.setFixedLengthStreamingMode(bytes.length);
+    try (OutputStream out = conn.getOutputStream()) {
+      out.write(bytes);
+    }
+    return conn;
+  }
+
+  private String readBody(HttpURLConnection conn) {
+    try {
+      return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      try {
+        return new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+      } catch (Exception ignored) {
+        return "";
+      }
+    }
   }
 
   private static String escape(String s) {

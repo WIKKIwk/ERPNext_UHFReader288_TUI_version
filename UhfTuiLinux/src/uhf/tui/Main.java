@@ -1022,7 +1022,12 @@ public final class Main {
           saveErpConfig(ctx.erp(), cfg);
           final boolean[] ok = {false};
           ui.runWithSpinner("Checking ERP", () -> ok[0] = ctx.erp().testOnce());
-          ui.setStatusMessage(ok[0] ? "ERP check: ok" : "ERP check: failed");
+          if (ok[0]) {
+            ui.setStatusMessage("ERP check: ok");
+          } else {
+            String msg = ctx.erp().lastErrMsg();
+            ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP check: failed" : "ERP check: failed (" + msg + ")");
+          }
         }
       }
     }
