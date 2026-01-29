@@ -12,19 +12,28 @@ import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.core.ReturnLossInfo;
 import uhf.core.WritePowerInfo;
+import uhf.erp.ErpConfig;
+import uhf.erp.ErpPusher;
+import uhf.erp.ErpTagEvent;
 import uhf.sdk.ReaderClient;
 
 public final class Main {
   public static void main(String[] args) {
     ConsoleUi ui = new ConsoleUi();
     ReaderClient reader = new ReaderClient();
+    ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
 
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
     ui.println("Menu mode. Use ↑/↓ + Enter.");
 
     setupCommands(registry);
-    menuLoop(ui, reader, registry);
+    try {
+      menuLoop(ui, reader, erp, registry);
+    } finally {
+      erp.shutdown();
+      reader.disconnect();
+    }
   }
 
   private static void setupCommands(CommandRegistry registry) {
@@ -42,7 +51,13 @@ public final class Main {
       int readerType = args.size() >= 4 ? parseInt(args.get(3), 4) : 4;
       int log = args.size() >= 5 ? parseInt(args.get(4), 0) : 0;
 
-      Result r = ctx.reader().connect(ip, port, readerType, log, ctx.ui()::printTag, () -> {});
+      Result r = ctx.reader().connect(ip, port, readerType, log,
+          tag -> {
+            ctx.ui().printTag(tag);
+            ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
+          },
+          () -> {}
+      );
       if (!r.ok()) {
         ctx.ui().println("Connect failed: " + r.code());
         return;
@@ -86,7 +101,13 @@ public final class Main {
               List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
           );
           if (hp != null) {
-            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, ctx.ui()::printTag, () -> {});
+            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
+                tag -> {
+                  ctx.ui().printTag(tag);
+                  ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
+                },
+                () -> {}
+            );
             if (r.ok()) {
               ctx.ui().println("Connected: " + hp.host() + "@" + hp.port());
               return;
@@ -579,8 +600,8 @@ public final class Main {
     ui.println("  quit - exit");
   }
 
-  private static void menuLoop(ConsoleUi ui, ReaderClient reader, CommandRegistry registry) {
-    CommandContext ctx = new CommandContext(reader, ui);
+  private static void menuLoop(ConsoleUi ui, ReaderClient reader, ErpPusher erp, CommandRegistry registry) {
+    CommandContext ctx = new CommandContext(reader, ui, erp);
     MenuId forwardTarget = null;
     while (true) {
       updateStatus(ui, reader);
@@ -736,7 +757,13 @@ public final class Main {
               List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
           );
           if (hp != null) {
-            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, ctx.ui()::printTag, () -> {});
+            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
+                tag -> {
+                  ctx.ui().printTag(tag);
+                  ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
+                },
+                () -> {}
+            );
             if (r.ok()) {
               ui.println("Connected: " + hp.host() + "@" + hp.port());
               connected = true;
@@ -1350,6 +1377,11 @@ public final class Main {
       }
     }
     return List.of();
+  }
+
+  private static ErpConfig loadErpConfig() {
+    Path file = Path.of("UhfTuiLinux", "erp.properties");
+    return ErpConfig.load(file);
   }
 
   private record RegionOption(String label, int band, double startMhz, double stepMhz, int count) {
