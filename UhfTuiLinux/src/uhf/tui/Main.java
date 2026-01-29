@@ -654,8 +654,13 @@ public final class Main {
 
   private static void menuLoop(ConsoleUi ui, ReaderClient reader, ErpPusher erp, CommandRegistry registry) {
     CommandContext ctx = new CommandContext(reader, ui, erp);
+    boolean autoTried = false;
     MenuId forwardTarget = null;
     while (true) {
+      if (!autoTried && !reader.isConnected()) {
+        autoTried = true;
+        attemptAutoConnect(ui, ctx);
+      }
       updateStatus(ui, reader, erp);
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
@@ -723,6 +728,54 @@ public final class Main {
           return;
         }
       }
+    }
+  }
+
+  private static void attemptAutoConnect(ConsoleUi ui, CommandContext ctx) {
+    int readerType = 4;
+    int log = 0;
+    List<Integer> ports = List.of(27011, 2022);
+    List<String> prefixes = NetworkScanner.detectPrefixes();
+    List<String> usbPrefixes = NetworkScanner.detectUsbPrefixes();
+    List<String> all = new ArrayList<>();
+    all.addAll(prefixes);
+    for (String p : usbPrefixes) {
+      if (!all.contains(p)) all.add(p);
+    }
+    if (all.isEmpty()) {
+      ui.setStatusMessage("Auto-connect: no LAN/USB prefixes found.");
+      return;
+    }
+    final NetworkScanner.HostPort[] found = {null};
+    ui.runWithSpinner("Auto-connecting", () -> {
+      for (String pfx : all) {
+        for (int p : ports) {
+          NetworkScanner.HostPort hp = NetworkScanner.findReader(
+              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
+          );
+          if (hp != null) {
+            found[0] = hp;
+            return;
+          }
+        }
+      }
+    });
+    if (found[0] == null) {
+      ui.setStatusMessage("Auto-connect: no reader found.");
+      return;
+    }
+    NetworkScanner.HostPort hp = found[0];
+    Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
+        tag -> {
+          ctx.ui().printTag(tag);
+          ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
+        },
+        () -> {}
+    );
+    if (r.ok()) {
+      ui.setStatusMessage("Auto-connect: " + hp.host() + "@" + hp.port());
+    } else {
+      ui.setStatusMessage("Auto-connect failed: " + r.code());
     }
   }
 
