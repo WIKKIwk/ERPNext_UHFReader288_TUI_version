@@ -27,14 +27,24 @@ public final class Main {
     ReaderClient reader = new ReaderClient();
     ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
+    int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 18000);
+    AgentServer agent = new AgentServer(agentPort,
+        () -> new AgentServer.Status(reader.isConnected(), TAG_STATS.total(), TAG_STATS.rate()));
+    boolean agentOk = agent.start();
 
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
     ui.println("Menu mode. Use ↑/↓ + Enter.");
+    if (agentOk) {
+      ui.println("Local agent: http://127.0.0.1:" + agentPort + " (ERP online detector)");
+    } else {
+      ui.println("Local agent failed to start on port " + agentPort);
+    }
 
     setupCommands(registry);
     try {
       menuLoop(ui, reader, erp, registry);
     } finally {
+      agent.stop();
       erp.shutdown();
       reader.disconnect();
     }
@@ -1574,6 +1584,14 @@ public final class Main {
 
     synchronized String statusLine() {
       return "Tags: " + total + " | Rate: " + rate + "/s";
+    }
+
+    synchronized long total() {
+      return total;
+    }
+
+    synchronized int rate() {
+      return rate;
     }
   }
 
