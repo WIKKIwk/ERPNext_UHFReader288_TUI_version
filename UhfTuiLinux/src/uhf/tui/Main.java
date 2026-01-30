@@ -1,9 +1,13 @@
 package uhf.tui;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import uhf.core.AntennaPowerInfo;
 import uhf.core.GpioStatus;
@@ -28,6 +32,7 @@ public final class Main {
     ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
     int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 18000);
+    List<String> agentUrls = listAgentUrls(agentPort);
     AgentServer agent = new AgentServer(agentPort,
         () -> new AgentServer.Status(reader.isConnected(), TAG_STATS.total(), TAG_STATS.rate()));
     boolean agentOk = agent.start();
@@ -35,7 +40,14 @@ public final class Main {
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
     ui.println("Menu mode. Use ↑/↓ + Enter.");
     if (agentOk) {
-      ui.println("Local agent: http://127.0.0.1:" + agentPort + " (ERP online detector)");
+      if (agentUrls.isEmpty()) {
+        ui.println("Local agent: http://127.0.0.1:" + agentPort + " (ERP online detector)");
+      } else {
+        ui.println("Agent URL (use in ERP settings):");
+        for (String url : agentUrls) {
+          ui.println("  " + url);
+        }
+      }
     } else {
       ui.println("Local agent failed to start on port " + agentPort);
     }
@@ -966,6 +978,7 @@ public final class Main {
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {
         "Tag Output",
+        "Agent URLs",
         "RF Power",
         "Write Power",
         "Per-Antenna Power",
@@ -985,7 +998,7 @@ public final class Main {
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 13) return;
+      if (sel == 14) return;
       switch (sel) {
         case 0 -> {
           int mode = ui.selectOption("Tag Output", new String[]{"Counts only", "Show tag lines"}, TAG_OUTPUT.show ? 1 : 0);
@@ -995,13 +1008,21 @@ public final class Main {
           ui.setStatusMessage(TAG_OUTPUT.show ? "Tag output: ON" : "Tag output: OFF");
         }
         case 1 -> {
+          List<String> urls = listAgentUrls(parseInt(System.getenv("RFID_AGENT_PORT"), 18000));
+          if (urls.isEmpty()) {
+            ui.showLines("Agent URLs", List.of("No LAN IP found.", "Use: http://127.0.0.1:18000"));
+          } else {
+            ui.showLines("Agent URLs", urls);
+          }
+        }
+        case 2 -> {
           int p = selectPowerValue(ui, "RF Power", 30);
           if (p == ConsoleUi.NAV_BACK) return;
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
-        case 2 -> menuWritePower(ui, ctx, registry);
-        case 3 -> menuAntennaPower(ui, ctx);
-        case 4 -> {
+        case 3 -> menuWritePower(ui, ctx, registry);
+        case 4 -> menuAntennaPower(ui, ctx);
+        case 5 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
           registry.execute(List.of("region",
@@ -1009,22 +1030,22 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 5 -> {
+        case 6 -> {
           int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
           if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
           int val = b == 0 ? 1 : 0;
           registry.execute(List.of("beep", String.valueOf(val)), ctx);
         }
-        case 6 -> menuAntennaCheck(ui, ctx);
-        case 7 -> menuReturnLoss(ui, ctx);
-        case 8 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 9 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
-        case 10 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
-        case 11 -> registry.execute(List.of("antenna",
+        case 7 -> menuAntennaCheck(ui, ctx);
+        case 8 -> menuReturnLoss(ui, ctx);
+        case 9 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 10 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
+        case 11 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 12 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, "Arg1", 0)),
             String.valueOf(askInt(ui, "Arg2", 0))), ctx);
-        case 12 -> menuErp(ui, ctx);
+        case 13 -> menuErp(ui, ctx);
       }
     }
   }
@@ -1534,6 +1555,25 @@ public final class Main {
     String erpState = erpStatus(erp);
     ui.setHeaderRight(erpState.isEmpty() ? readerState : readerState + " | " + erpState);
     ui.setStatusBase(TAG_STATS.statusLine());
+  }
+
+  private static List<String> listAgentUrls(int port) {
+    List<String> out = new ArrayList<>();
+    try {
+      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+        if (!nif.isUp() || nif.isLoopback() || nif.isVirtual()) continue;
+        for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
+          if (addr instanceof Inet4Address) {
+            String ip = addr.getHostAddress();
+            if (ip != null && !ip.isBlank()) {
+              out.add("http://" + ip + ":" + port);
+            }
+          }
+        }
+      }
+    } catch (Exception ignored) {
+    }
+    return out;
   }
 
   private static String erpStatus(ErpPusher erp) {
