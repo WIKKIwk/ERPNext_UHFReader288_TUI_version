@@ -1170,10 +1170,10 @@ public final class Main {
             case 1000 -> 9;
             default -> 4;
           };
-          int sel = ui.selectOption("Batch ms", items, defIdx);
-          if (sel == ConsoleUi.NAV_BACK) break;
-          if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-          int ms = switch (sel) {
+          int choice = ui.selectOption("Batch ms", items, defIdx);
+          if (choice == ConsoleUi.NAV_BACK) break;
+          if (choice == ConsoleUi.NAV_FORWARD) choice = ui.getLastMenuIndex();
+          int ms = switch (choice) {
             case 0 -> 0;
             case 1 -> 10;
             case 2 -> 20;
