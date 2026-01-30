@@ -1162,19 +1162,37 @@ public final class Main {
           if (selProfile == ConsoleUi.NAV_BACK) break;
           if (selProfile == ConsoleUi.NAV_FORWARD) selProfile = ui.getLastMenuIndex();
           if (selProfile == 3) break;
+          double defMeters = switch (selProfile) {
+            case 0 -> 2.0;
+            case 2 -> 10.0;
+            default -> 5.0;
+          };
+          Double meters = askDoubleOrBack(ui, L("Distance (m)", "Masofa (m)", "Дистанция (м)"), defMeters);
+          if (meters == null) break;
+          if (meters < 0.1) meters = 0.1;
+          if (meters > 50) meters = 50.0;
+          double base = switch (selProfile) {
+            case 0 -> 12.0;
+            case 2 -> 16.0;
+            default -> 14.0;
+          };
+          double slope = switch (selProfile) {
+            case 0 -> 2.0;
+            case 2 -> 1.2;
+            default -> 1.5;
+          };
+          int power = (int) Math.round(base + slope * meters);
+          if (power < 10) power = 10;
+          if (power > 33) power = 33;
           if (!ctx.reader().isConnected()) {
-            ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
+            ui.setStatusMessage(L("Not connected. Suggested power: ", "Ulanmagan. Tavsiya quvvat: ", "Не подключено. Реком. мощность: ")
+                + power + " dBm");
             break;
           }
-          int power = switch (selProfile) {
-            case 0 -> 15;
-            case 2 -> 30;
-            default -> 23;
-          };
           Result r = ctx.reader().setPower(power);
           ui.setStatusMessage(r.ok()
               ? L("Read profile set: ", "O'qish profili o'rnatildi: ", "Профиль чтения установлен: ")
-              + profiles[selProfile] + " (" + power + " dBm)"
+              + profiles[selProfile] + " (" + meters + " m → " + power + " dBm)"
               : L("SetRfPower failed: ", "SetRfPower xato: ", "SetRfPower ошибка: ") + r.code());
         }
         case 4 -> menuWritePower(ui, ctx, registry);
@@ -1539,6 +1557,13 @@ public final class Main {
     if (line == null) return null;
     if (line.isBlank()) return def;
     return line;
+  }
+
+  private static Double askDoubleOrBack(ConsoleUi ui, String label, double def) {
+    String line = ui.readLineInMenuOrBack(label + " [" + def + "]: ");
+    if (line == null) return null;
+    if (line.isBlank()) return def;
+    return parseDouble(line, def);
   }
 
   private static String askString(ConsoleUi ui, String label) {
