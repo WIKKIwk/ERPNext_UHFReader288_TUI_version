@@ -145,6 +145,16 @@ public final class ErpPusher {
         && !cfg.endpoint.isBlank();
   }
 
+  private boolean heartbeatEnabled() {
+    return cfg != null
+        && cfg.baseUrl != null
+        && !cfg.baseUrl.isBlank()
+        && cfg.endpoint != null
+        && !cfg.endpoint.isBlank()
+        && cfg.heartbeatMs > 0
+        && !normalizeAuth(cfg.auth).isEmpty();
+  }
+
   private void trimQueue() {
     int max = Math.max(0, cfg.maxQueue);
     if (max == 0) return;
@@ -154,11 +164,12 @@ public final class ErpPusher {
   }
 
   private synchronized void schedule() {
-    if (!enabled()) return;
-    long batchMs = Math.max(10, cfg.batchMs);
-    flushTask = scheduler.scheduleWithFixedDelay(this::safeFlush, batchMs, batchMs, TimeUnit.MILLISECONDS);
-    int hb = cfg.heartbeatMs;
-    if (hb > 0) {
+    if (enabled()) {
+      long batchMs = Math.max(10, cfg.batchMs);
+      flushTask = scheduler.scheduleWithFixedDelay(this::safeFlush, batchMs, batchMs, TimeUnit.MILLISECONDS);
+    }
+    if (heartbeatEnabled()) {
+      int hb = cfg.heartbeatMs;
       heartbeatTask = scheduler.scheduleWithFixedDelay(this::safeHeartbeat, hb, hb, TimeUnit.MILLISECONDS);
     }
   }
@@ -184,7 +195,9 @@ public final class ErpPusher {
   private void safeHeartbeat() {
     try {
       sendHeartbeat();
-    } catch (Exception ignored) {
+    } catch (Exception e) {
+      lastErrAt = System.currentTimeMillis();
+      lastErrMsg = e.getMessage();
     }
   }
 
@@ -225,8 +238,7 @@ public final class ErpPusher {
   }
 
   private void sendHeartbeat() throws Exception {
-    if (!enabled()) return;
-    if (cfg.heartbeatMs <= 0) return;
+    if (!heartbeatEnabled()) return;
     postTags(List.of(), true);
     lastOkAt = System.currentTimeMillis();
     lastErrAt = 0;
