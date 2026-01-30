@@ -1095,6 +1095,7 @@ public final class Main {
         L("Tag Output", "Tag chiqishi", "Вывод тегов"),
         L("Agent URLs", "Agent URL", "URL агента"),
         L("RF Power", "RF quvvat", "RF мощность"),
+        L("Read Profile", "O'qish profili", "Профиль чтения"),
         L("Write Power", "Yozish quvvati", "Мощность записи"),
         L("Per-Antenna Power", "Antenna bo'yicha", "По антеннам"),
         L("Region", "Mintaqa", "Регион"),
@@ -1113,7 +1114,7 @@ public final class Main {
       int sel = ui.selectOption(L("Config/IO", "Sozlamalar/IO", "Настройки/IO"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 14) return;
+      if (sel == 15) return;
       switch (sel) {
         case 0 -> {
           int mode = ui.selectOption(
@@ -1150,9 +1151,35 @@ public final class Main {
           if (p == ConsoleUi.NAV_BACK) return;
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
-        case 3 -> menuWritePower(ui, ctx, registry);
-        case 4 -> menuAntennaPower(ui, ctx);
-        case 5 -> {
+        case 3 -> {
+          if (!ctx.reader().isConnected()) {
+            ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
+            break;
+          }
+          String[] profiles = {
+              L("Short range", "Qisqa masofa", "Короткая дистанция"),
+              L("Balanced", "Muvozanat", "Сбалансировано"),
+              L("Long range", "Uzoq masofa", "Длинная дистанция"),
+              L("Back", "Orqaga", "Назад")
+          };
+          int selProfile = ui.selectOption(L("Read Profile", "O'qish profili", "Профиль чтения"), profiles, 1);
+          if (selProfile == ConsoleUi.NAV_BACK) break;
+          if (selProfile == ConsoleUi.NAV_FORWARD) selProfile = ui.getLastMenuIndex();
+          if (selProfile == 3) break;
+          int power = switch (selProfile) {
+            case 0 -> 15;
+            case 2 -> 30;
+            default -> 23;
+          };
+          Result r = ctx.reader().setPower(power);
+          ui.setStatusMessage(r.ok()
+              ? L("Read profile set: ", "O'qish profili o'rnatildi: ", "Профиль чтения установлен: ")
+              + profiles[selProfile] + " (" + power + " dBm)"
+              : L("SetRfPower failed: ", "SetRfPower xato: ", "SetRfPower ошибка: ") + r.code());
+        }
+        case 4 -> menuWritePower(ui, ctx, registry);
+        case 5 -> menuAntennaPower(ui, ctx);
+        case 6 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
           registry.execute(List.of("region",
@@ -1160,7 +1187,7 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 6 -> {
+        case 7 -> {
           int b = ui.selectOption(L("Beep", "Signal", "Сигнал"),
               new String[]{L("On (1)", "Yoqilgan (1)", "Вкл (1)"), L("Off (0)", "O'chirilgan (0)", "Выкл (0)")}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
@@ -1168,15 +1195,15 @@ public final class Main {
           int val = b == 0 ? 1 : 0;
           registry.execute(List.of("beep", String.valueOf(val)), ctx);
         }
-        case 7 -> menuAntennaCheck(ui, ctx);
-        case 8 -> menuReturnLoss(ui, ctx);
-        case 9 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 10 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, L("GPIO mask", "GPIO maska", "GPIO маска"), 0))), ctx);
-        case 11 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, L("Relay value", "Rele qiymati", "Значение реле"), 0))), ctx);
-        case 12 -> registry.execute(List.of("antenna",
+        case 8 -> menuAntennaCheck(ui, ctx);
+        case 9 -> menuReturnLoss(ui, ctx);
+        case 10 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 11 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, L("GPIO mask", "GPIO maska", "GPIO маска"), 0))), ctx);
+        case 12 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, L("Relay value", "Rele qiymati", "Значение реле"), 0))), ctx);
+        case 13 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, L("Arg1", "Arg1", "Arg1"), 0)),
             String.valueOf(askInt(ui, L("Arg2", "Arg2", "Arg2"), 0))), ctx);
-        case 13 -> menuErp(ui, ctx);
+        case 14 -> menuErp(ui, ctx);
       }
     }
   }
