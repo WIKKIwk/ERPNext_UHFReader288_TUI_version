@@ -884,6 +884,8 @@ public final class ConsoleUi {
         int cy = System.in.read();
         if (cb == -1 || cx == -1 || cy == -1) return NAV_ESC;
         int code = cb - 32;
+        if (code == 8) return NAV_BACK;
+        if (code == 9) return NAV_FORWARD;
         if (code == 64) return NAV_SCROLL_UP;
         if (code == 65) return NAV_SCROLL_DOWN;
         return NAV_ESC;
@@ -905,6 +907,8 @@ public final class ConsoleUi {
         String[] parts = body.split(";");
         if (parts.length >= 1) {
           int b = parseInt(parts[0], -1);
+          if (b == 8) return NAV_BACK;
+          if (b == 9) return NAV_FORWARD;
           if (b == 64) return NAV_SCROLL_UP;
           if (b == 65) return NAV_SCROLL_DOWN;
         }
