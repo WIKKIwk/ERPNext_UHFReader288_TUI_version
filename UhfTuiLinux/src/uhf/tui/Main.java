@@ -11,6 +11,7 @@ import uhf.core.InventoryParams;
 import uhf.core.ReaderInfo;
 import uhf.core.Result;
 import uhf.core.ReturnLossInfo;
+import uhf.core.TagRead;
 import uhf.core.WritePowerInfo;
 import uhf.erp.ErpConfig;
 import uhf.erp.ErpPusher;
@@ -18,6 +19,9 @@ import uhf.erp.ErpTagEvent;
 import uhf.sdk.ReaderClient;
 
 public final class Main {
+  private static final TagStats TAG_STATS = new TagStats();
+  private static final TagOutput TAG_OUTPUT = new TagOutput();
+
   public static void main(String[] args) {
     ConsoleUi ui = new ConsoleUi();
     ReaderClient reader = new ReaderClient();
@@ -51,13 +55,7 @@ public final class Main {
       int readerType = args.size() >= 4 ? parseInt(args.get(3), 4) : 4;
       int log = args.size() >= 5 ? parseInt(args.get(4), 0) : 0;
 
-      Result r = ctx.reader().connect(ip, port, readerType, log,
-          tag -> {
-            ctx.ui().printTag(tag);
-            ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
-          },
-          () -> {}
-      );
+      Result r = ctx.reader().connect(ip, port, readerType, log, tag -> handleTag(ctx, tag), () -> {});
       if (!r.ok()) {
         ctx.ui().println("Connect failed: " + r.code());
         return;
@@ -101,13 +99,7 @@ public final class Main {
               List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
           );
           if (hp != null) {
-            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
-                tag -> {
-                  ctx.ui().printTag(tag);
-                  ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
-                },
-                () -> {}
-            );
+            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
             if (r.ok()) {
               ctx.ui().println("Connected: " + hp.host() + "@" + hp.port());
               return;
@@ -765,13 +757,7 @@ public final class Main {
       return;
     }
     NetworkScanner.HostPort hp = found[0];
-    Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
-        tag -> {
-          ctx.ui().printTag(tag);
-          ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
-        },
-        () -> {}
-    );
+    Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
     if (r.ok()) {
       ui.setStatusMessage("Auto-connect: " + hp.host() + "@" + hp.port());
     } else {
@@ -862,13 +848,7 @@ public final class Main {
               List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
           );
           if (hp != null) {
-            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log,
-                tag -> {
-                  ctx.ui().printTag(tag);
-                  ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
-                },
-                () -> {}
-            );
+            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
             if (r.ok()) {
               ui.println("Connected: " + hp.host() + "@" + hp.port());
               connected = true;
@@ -975,6 +955,7 @@ public final class Main {
 
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {
+        "Tag Output",
         "RF Power",
         "Write Power",
         "Per-Antenna Power",
@@ -994,16 +975,23 @@ public final class Main {
       int sel = ui.selectOption("Config/IO", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 12) return;
+      if (sel == 13) return;
       switch (sel) {
         case 0 -> {
+          int mode = ui.selectOption("Tag Output", new String[]{"Counts only", "Show tag lines"}, TAG_OUTPUT.show ? 1 : 0);
+          if (mode == ConsoleUi.NAV_BACK) break;
+          if (mode == ConsoleUi.NAV_FORWARD) mode = ui.getLastMenuIndex();
+          TAG_OUTPUT.show = mode == 1;
+          ui.setStatusMessage(TAG_OUTPUT.show ? "Tag output: ON" : "Tag output: OFF");
+        }
+        case 1 -> {
           int p = selectPowerValue(ui, "RF Power", 30);
           if (p == ConsoleUi.NAV_BACK) return;
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
-        case 1 -> menuWritePower(ui, ctx, registry);
-        case 2 -> menuAntennaPower(ui, ctx);
-        case 3 -> {
+        case 2 -> menuWritePower(ui, ctx, registry);
+        case 3 -> menuAntennaPower(ui, ctx);
+        case 4 -> {
           RegionSelection region = selectRegion(ui);
           if (region == null) break;
           registry.execute(List.of("region",
@@ -1011,22 +999,22 @@ public final class Main {
               String.valueOf(region.maxFreq()),
               String.valueOf(region.minFreq())), ctx);
         }
-        case 4 -> {
+        case 5 -> {
           int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
           if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
           int val = b == 0 ? 1 : 0;
           registry.execute(List.of("beep", String.valueOf(val)), ctx);
         }
-        case 5 -> menuAntennaCheck(ui, ctx);
-        case 6 -> menuReturnLoss(ui, ctx);
-        case 7 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 8 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
-        case 9 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
-        case 10 -> registry.execute(List.of("antenna",
+        case 6 -> menuAntennaCheck(ui, ctx);
+        case 7 -> menuReturnLoss(ui, ctx);
+        case 8 -> registry.execute(List.of("gpio", "get"), ctx);
+        case 9 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
+        case 10 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 11 -> registry.execute(List.of("antenna",
             String.valueOf(askInt(ui, "Arg1", 0)),
             String.valueOf(askInt(ui, "Arg2", 0))), ctx);
-        case 11 -> menuErp(ui, ctx);
+        case 12 -> menuErp(ui, ctx);
       }
     }
   }
@@ -1523,11 +1511,19 @@ public final class Main {
     return sel;
   }
 
+  private static void handleTag(CommandContext ctx, TagRead tag) {
+    TAG_STATS.onTag(ctx.ui());
+    if (TAG_OUTPUT.show) {
+      ctx.ui().printTag(tag);
+    }
+    ctx.erp().enqueue(new ErpTagEvent(tag.epcId(), tag.memId(), tag.rssi(), tag.antId(), tag.ipAddr(), System.currentTimeMillis()));
+  }
+
   private static void updateStatus(ConsoleUi ui, ReaderClient reader, ErpPusher erp) {
     String readerState = reader.isConnected() ? "UHF: connected" : "UHF: disconnected";
     String erpState = erpStatus(erp);
     ui.setHeaderRight(erpState.isEmpty() ? readerState : readerState + " | " + erpState);
-    ui.setStatusBase("");
+    ui.setStatusBase(TAG_STATS.statusLine());
   }
 
   private static String erpStatus(ErpPusher erp) {
@@ -1548,6 +1544,37 @@ public final class Main {
   private enum ShellExit {
     BACK,
     QUIT
+  }
+
+  private static final class TagOutput {
+    private volatile boolean show = false;
+  }
+
+  private static final class TagStats {
+    private long total = 0;
+    private long sinceLast = 0;
+    private long lastRateAt = System.currentTimeMillis();
+    private long lastUiAt = 0;
+    private int rate = 0;
+
+    synchronized void onTag(ConsoleUi ui) {
+      total++;
+      sinceLast++;
+      long now = System.currentTimeMillis();
+      if (now - lastRateAt >= 1000) {
+        rate = (int) sinceLast;
+        sinceLast = 0;
+        lastRateAt = now;
+      }
+      if (ui != null && now - lastUiAt >= 1000) {
+        ui.setStatusBase(statusLine());
+        lastUiAt = now;
+      }
+    }
+
+    synchronized String statusLine() {
+      return "Tags: " + total + " | Rate: " + rate + "/s";
+    }
   }
 
   private enum MenuId {

@@ -23,6 +23,7 @@ public final class ConsoleUi {
   private String statusBase;
   private String statusMessage;
   private String headerRight;
+  private String headerLeft;
   private String inputPrompt;
   private int cachedCols = 80;
   private long cachedColsAt = 0L;
@@ -414,6 +415,13 @@ public final class ConsoleUi {
     }
   }
 
+  public void setHeaderLeft(String message) {
+    headerLeft = message == null ? "" : message;
+    if (menuMode && supportsAnsi() && lastMenuOptions != null) {
+      renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
+    }
+  }
+
   public boolean runWithSpinner(String message, Runnable task) {
     if (!menuMode || !supportsAnsi() || lastMenuOptions == null) {
       task.run();
@@ -454,7 +462,9 @@ public final class ConsoleUi {
     String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
     String status = combineStatus();
     String input = inputPrompt == null ? "" : inputPrompt;
-    String header = label == null ? "" : label;
+    String header = (headerLeft == null || headerLeft.isEmpty())
+        ? (label == null ? "" : label)
+        : headerLeft;
     String right = headerRight == null ? "" : headerRight;
     int width = Math.max(header.length(), hint.length());
     if (!right.isEmpty()) width = Math.max(width, right.length());
@@ -544,6 +554,7 @@ public final class ConsoleUi {
     statusBase = null;
     statusMessage = null;
     inputPrompt = null;
+    headerLeft = null;
     lastMenuLabel = null;
     lastMenuOptions = null;
   }
