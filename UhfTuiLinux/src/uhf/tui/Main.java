@@ -758,7 +758,6 @@ public final class Main {
               L("Inventory", "Inventar", "Инвентарь"),
               L("Tag Ops", "Tag amallari", "Операции тегов"),
               L("Settings", "Sozlamalar", "Настройки"),
-              L("Command shell", "Buyruqlar", "Команды"),
               L("Quit", "Chiqish", "Выход")
           },
           0
@@ -773,7 +772,6 @@ public final class Main {
           case INVENTORY -> 2;
           case TAGOPS -> 3;
           case SETTINGS -> 4;
-          case SHELL -> 5;
         };
       } else if (sel == ConsoleUi.NAV_FORWARD) {
         sel = ui.getLastMenuIndex();
@@ -798,15 +796,6 @@ public final class Main {
         case 4 -> {
           menuSettings(ui, ctx, registry);
           forwardTarget = MenuId.SETTINGS;
-        }
-        case 5 -> {
-          ui.exitMenuMode();
-          ShellExit exit = commandShell(ui, ctx, registry);
-          if (exit == ShellExit.QUIT) {
-            reader.disconnect();
-            return;
-          }
-          forwardTarget = MenuId.SHELL;
         }
         default -> {
           reader.disconnect();
@@ -1994,8 +1983,7 @@ public final class Main {
     SCAN,
     INVENTORY,
     TAGOPS,
-    SETTINGS,
-    SHELL
+    SETTINGS
   }
 
   private static List<String> readReadmeLines() {
