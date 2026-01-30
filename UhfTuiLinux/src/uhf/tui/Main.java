@@ -784,11 +784,13 @@ public final class Main {
       return;
     }
     final NetworkScanner.HostPort[] found = {null};
+    final int rt = readerType;
+    final int lg = log;
     ui.runWithSpinner("Auto-connecting", () -> {
       for (String pfx : all) {
         for (int p : ports) {
           NetworkScanner.HostPort hp = NetworkScanner.findReader(
-              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(120)
+              List.of(pfx), List.of(p), rt, lg, Duration.ofMillis(120)
           );
           if (hp != null) {
             found[0] = hp;
