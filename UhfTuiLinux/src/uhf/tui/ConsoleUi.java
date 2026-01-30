@@ -761,6 +761,8 @@ public final class ConsoleUi {
     System.out.flush();
     int count = lines == null ? 0 : lines.size();
     lastMenuLines = 6 + count;
+    lastRenderedLines = lastMenuLines;
+    lastRenderedWidth = width;
     cursorFromMenuBottom = 0;
   }
 
@@ -808,6 +810,8 @@ public final class ConsoleUi {
     System.out.print(clearLine(bl + repeat(h, width + 2) + br) + "\n");
     System.out.flush();
     lastMenuLines = 6 + size;
+    lastRenderedLines = lastMenuLines;
+    lastRenderedWidth = width;
     cursorFromMenuBottom = 0;
   }
 
