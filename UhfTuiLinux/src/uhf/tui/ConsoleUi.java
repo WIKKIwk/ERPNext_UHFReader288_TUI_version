@@ -31,6 +31,13 @@ public final class ConsoleUi {
   private static final String ANSI_BOLD = "\033[1m";
   private static final String ANSI_DIM = "\033[2m";
   private static final String ANSI_REVERSE = "\033[7m";
+  private static final int NAV_UP = 1001;
+  private static final int NAV_DOWN = 1002;
+  private static final int NAV_LEFT = 1003;
+  private static final int NAV_RIGHT = 1004;
+  private static final int NAV_SCROLL_UP = 1005;
+  private static final int NAV_SCROLL_DOWN = 1006;
+  private static final int NAV_ESC = 1007;
 
   public void println(String s) {
     if (menuMode && supportsAnsi() && lastMenuOptions != null) {
@@ -78,6 +85,7 @@ public final class ConsoleUi {
     menuMode = true;
     int idx = Math.max(0, Math.min(defaultIndex, options.length - 1));
     try {
+      enableMouse();
       resetCursorOffset();
       renderSwipeMenu(label, options, idx, lastMenuLines == 0);
       while (true) {
@@ -87,28 +95,22 @@ public final class ConsoleUi {
           return idx;
         }
         if (ch == 27) { // ESC
-          int ch1 = System.in.read();
-          if (ch1 == -1) return idx;
-          if (ch1 == '[') {
-            int ch2 = System.in.read();
-            if (ch2 == 'A') {
-              idx = (idx - 1 + options.length) % options.length;
-              renderSwipeMenu(label, options, idx, false);
-              continue;
-            }
-            if (ch2 == 'B') {
-              idx = (idx + 1) % options.length;
-              renderSwipeMenu(label, options, idx, false);
-              continue;
-            }
-            if (ch2 == 'D') { // left
-              return NAV_BACK;
-            }
-            if (ch2 == 'C') { // right
-              return NAV_FORWARD;
-            }
-          } else {
-            return idx;
+          int nav = readNavKey();
+          if (nav == NAV_UP || nav == NAV_SCROLL_UP) {
+            idx = (idx - 1 + options.length) % options.length;
+            renderSwipeMenu(label, options, idx, false);
+            continue;
+          }
+          if (nav == NAV_DOWN || nav == NAV_SCROLL_DOWN) {
+            idx = (idx + 1) % options.length;
+            renderSwipeMenu(label, options, idx, false);
+            continue;
+          }
+          if (nav == NAV_LEFT || nav == NAV_ESC) {
+            return NAV_BACK;
+          }
+          if (nav == NAV_RIGHT) {
+            return NAV_FORWARD;
           }
         }
         if (ch == 'j' || ch == 'J') {
@@ -132,6 +134,7 @@ public final class ConsoleUi {
     } catch (Throwable t) {
       return selectOptionLine(label, options, defaultIndex);
     } finally {
+      disableMouse();
       setTerminalRaw(false);
     }
   }
@@ -146,6 +149,7 @@ public final class ConsoleUi {
     menuMode = true;
     int start = Math.max(0, Math.min(idx, Math.max(0, options.length - size)));
     try {
+      enableMouse();
       while (true) {
         int end = Math.min(options.length, start + size);
         String pageLabel = label + " (" + (start + 1) + "-" + end + "/" + options.length + ")";
@@ -160,23 +164,17 @@ public final class ConsoleUi {
         if (ch == -1) return idx;
         if (ch == '\r' || ch == '\n') return idx;
         if (ch == 27) { // ESC
-          int ch1 = System.in.read();
-          if (ch1 == -1) return idx;
-          if (ch1 == '[') {
-            int ch2 = System.in.read();
-            if (ch2 == 'A') { // up
-              idx = (idx - 1 + options.length) % options.length;
-            } else if (ch2 == 'B') { // down
-              idx = (idx + 1) % options.length;
-            } else if (ch2 == 'D') { // left
-              return NAV_BACK;
-            } else if (ch2 == 'C') { // right
-              return NAV_FORWARD;
-            } else {
-              continue;
-            }
+          int nav = readNavKey();
+          if (nav == NAV_UP || nav == NAV_SCROLL_UP) {
+            idx = (idx - 1 + options.length) % options.length;
+          } else if (nav == NAV_DOWN || nav == NAV_SCROLL_DOWN) {
+            idx = (idx + 1) % options.length;
+          } else if (nav == NAV_LEFT || nav == NAV_ESC) {
+            return NAV_BACK;
+          } else if (nav == NAV_RIGHT) {
+            return NAV_FORWARD;
           } else {
-            return idx;
+            continue;
           }
         } else if (ch == 'j' || ch == 'J') {
           idx = (idx + 1) % options.length;
@@ -196,6 +194,7 @@ public final class ConsoleUi {
     } catch (Throwable t) {
       return selectOption(label, options, defaultIndex);
     } finally {
+      disableMouse();
       setTerminalRaw(false);
     }
   }
@@ -342,32 +341,27 @@ public final class ConsoleUi {
       return;
     }
     try {
+      enableMouse();
       while (true) {
         renderLinesPage(title, lines, start, size);
         int ch = System.in.read();
         if (ch == -1) break;
         if (ch == 27) { // ESC or arrows
-          int ch1 = System.in.read();
-          if (ch1 == -1) break;
-          if (ch1 == '[') {
-            int ch2 = System.in.read();
-            if (ch2 == 'A') { // up
-              start = Math.max(0, start - 1);
-              continue;
-            }
-            if (ch2 == 'B') { // down
-              int maxStart = Math.max(0, lines.size() - size);
-              start = Math.min(maxStart, start + 1);
-              continue;
-            }
-            if (ch2 == 'D') { // left
-              break;
-            }
-            if (ch2 == 'C') { // right
-              continue;
-            }
-          } else {
+          int nav = readNavKey();
+          if (nav == NAV_UP || nav == NAV_SCROLL_UP) {
+            start = Math.max(0, start - 1);
+            continue;
+          }
+          if (nav == NAV_DOWN || nav == NAV_SCROLL_DOWN) {
+            int maxStart = Math.max(0, lines.size() - size);
+            start = Math.min(maxStart, start + 1);
+            continue;
+          }
+          if (nav == NAV_LEFT || nav == NAV_ESC) {
             break;
+          }
+          if (nav == NAV_RIGHT) {
+            continue;
           }
         }
         if (ch == 'j' || ch == 'J') {
@@ -385,6 +379,7 @@ public final class ConsoleUi {
       }
     } catch (Throwable ignored) {
     } finally {
+      disableMouse();
       setTerminalRaw(false);
       renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
     }
@@ -857,6 +852,76 @@ public final class ConsoleUi {
       return p.waitFor() == 0;
     } catch (Throwable ignored) {
       return false;
+    }
+  }
+
+  private void enableMouse() {
+    if (!supportsAnsi()) return;
+    System.out.print("\033[?1000h\033[?1006h");
+    System.out.flush();
+  }
+
+  private void disableMouse() {
+    if (!supportsAnsi()) return;
+    System.out.print("\033[?1000l\033[?1006l");
+    System.out.flush();
+  }
+
+  private int readNavKey() {
+    try {
+      int ch1 = System.in.read();
+      if (ch1 == -1) return NAV_ESC;
+      if (ch1 != '[') return NAV_ESC;
+      int ch2 = System.in.read();
+      if (ch2 == -1) return NAV_ESC;
+      if (ch2 == 'A') return NAV_UP;
+      if (ch2 == 'B') return NAV_DOWN;
+      if (ch2 == 'C') return NAV_RIGHT;
+      if (ch2 == 'D') return NAV_LEFT;
+      if (ch2 == 'M') { // X10 mouse
+        int cb = System.in.read();
+        int cx = System.in.read();
+        int cy = System.in.read();
+        if (cb == -1 || cx == -1 || cy == -1) return NAV_ESC;
+        int code = cb - 32;
+        if (code == 64) return NAV_SCROLL_UP;
+        if (code == 65) return NAV_SCROLL_DOWN;
+        return NAV_ESC;
+      }
+      if (ch2 == '<') { // SGR mouse
+        StringBuilder sb = new StringBuilder();
+        while (true) {
+          int c = System.in.read();
+          if (c == -1) return NAV_ESC;
+          if (c == 'M' || c == 'm') {
+            sb.append((char) c);
+            break;
+          }
+          sb.append((char) c);
+        }
+        String s = sb.toString();
+        if (s.length() < 2) return NAV_ESC;
+        String body = s.substring(0, s.length() - 1);
+        String[] parts = body.split(";");
+        if (parts.length >= 1) {
+          int b = parseInt(parts[0], -1);
+          if (b == 64) return NAV_SCROLL_UP;
+          if (b == 65) return NAV_SCROLL_DOWN;
+        }
+        return NAV_ESC;
+      }
+      return NAV_ESC;
+    } catch (Throwable t) {
+      return NAV_ESC;
+    }
+  }
+
+  private int parseInt(String s, int def) {
+    if (s == null) return def;
+    try {
+      return Integer.parseInt(s.trim());
+    } catch (Exception e) {
+      return def;
     }
   }
 }
