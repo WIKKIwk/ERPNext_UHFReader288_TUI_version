@@ -1162,15 +1162,8 @@ public final class Main {
           if (selProfile == ConsoleUi.NAV_BACK) break;
           if (selProfile == ConsoleUi.NAV_FORWARD) selProfile = ui.getLastMenuIndex();
           if (selProfile == 3) break;
-          double defMeters = switch (selProfile) {
-            case 0 -> 2.0;
-            case 2 -> 10.0;
-            default -> 5.0;
-          };
-          Double meters = askDoubleOrBack(ui, L("Distance (m)", "Masofa (m)", "Дистанция (м)"), defMeters);
+          Double meters = selectDistanceMeters(ui, selProfile);
           if (meters == null) break;
-          if (meters < 0.1) meters = 0.1;
-          if (meters > 50) meters = 50.0;
           double base = switch (selProfile) {
             case 0 -> 12.0;
             case 2 -> 16.0;
@@ -1564,6 +1557,43 @@ public final class Main {
     if (line == null) return null;
     if (line.isBlank()) return def;
     return parseDouble(line, def);
+  }
+
+  private static Double selectDistanceMeters(ConsoleUi ui, int profileIdx) {
+    String[] options = {
+        "1 m",
+        "2 m",
+        "3 m",
+        "5 m",
+        "7 m",
+        "10 m",
+        "15 m",
+        "20 m",
+        "30 m",
+        "40 m",
+        "50 m",
+        L("Custom", "Maxsus", "Пользовательский"),
+        L("Back", "Orqaga", "Назад")
+    };
+    int def = switch (profileIdx) {
+      case 0 -> 1;
+      case 2 -> 5;
+      default -> 3;
+    };
+    int sel = ui.selectOption(L("Distance (m)", "Masofa (m)", "Дистанция (м)"), options, def);
+    if (sel == ConsoleUi.NAV_BACK) return null;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel == options.length - 1) return null;
+    if (sel == options.length - 2) {
+      Double m = askDoubleOrBack(ui, L("Distance (m)", "Masofa (m)", "Дистанция (м)"), 5.0);
+      if (m == null) return null;
+      if (m < 0.1) m = 0.1;
+      if (m > 50) m = 50.0;
+      return m;
+    }
+    double[] vals = {1,2,3,5,7,10,15,20,30,40,50};
+    if (sel < 0 || sel >= vals.length) return 5.0;
+    return vals[sel];
   }
 
   private static String askString(ConsoleUi ui, String label) {
