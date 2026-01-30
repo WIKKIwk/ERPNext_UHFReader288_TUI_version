@@ -690,7 +690,7 @@ public final class Main {
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
           "Main [" + status + "]",
-          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Config/IO", "Info", "About", "Command shell", "Quit"},
+          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Settings", "Command shell", "Quit"},
           0
       );
       if (sel == ConsoleUi.NAV_BACK) {
@@ -702,10 +702,8 @@ public final class Main {
           case SCAN -> 1;
           case INVENTORY -> 2;
           case TAGOPS -> 3;
-          case CONFIG -> 4;
-          case INFO -> 5;
-          case ABOUT -> 6;
-          case SHELL -> 7;
+          case SETTINGS -> 4;
+          case SHELL -> 5;
         };
       } else if (sel == ConsoleUi.NAV_FORWARD) {
         sel = ui.getLastMenuIndex();
@@ -728,18 +726,10 @@ public final class Main {
           forwardTarget = MenuId.TAGOPS;
         }
         case 4 -> {
-          menuConfig(ui, ctx, registry);
-          forwardTarget = MenuId.CONFIG;
+          menuSettings(ui, ctx, registry);
+          forwardTarget = MenuId.SETTINGS;
         }
         case 5 -> {
-          menuInfo(ui, ctx, registry);
-          forwardTarget = MenuId.INFO;
-        }
-        case 6 -> {
-          menuAbout(ui);
-          forwardTarget = MenuId.ABOUT;
-        }
-        case 7 -> {
           ui.exitMenuMode();
           ShellExit exit = commandShell(ui, ctx, registry);
           if (exit == ShellExit.QUIT) {
@@ -752,6 +742,23 @@ public final class Main {
           reader.disconnect();
           return;
         }
+      }
+    }
+  }
+
+  private static void menuSettings(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
+    String[] options = {"Reader settings", "ERP Push", "Info", "About", "Back"};
+    while (true) {
+      updateStatus(ui, ctx.reader(), ctx.erp());
+      int sel = ui.selectOption("Settings", options, 0);
+      if (sel == ConsoleUi.NAV_BACK) return;
+      if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+      if (sel == 4) return;
+      switch (sel) {
+        case 0 -> menuConfig(ui, ctx, registry);
+        case 1 -> menuErp(ui, ctx);
+        case 2 -> menuInfo(ui, ctx, registry);
+        case 3 -> menuAbout(ui);
       }
     }
   }
@@ -1773,9 +1780,7 @@ public final class Main {
     SCAN,
     INVENTORY,
     TAGOPS,
-    CONFIG,
-    INFO,
-    ABOUT,
+    SETTINGS,
     SHELL
   }
 
