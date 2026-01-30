@@ -1081,13 +1081,13 @@ public final class Main {
   }
 
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Status", "Enable", "Disable", "Set URL", "Test (fake)", "Back"};
+    String[] options = {"Status", "Enable", "Disable", "Set URL", "Test (fake)", "Set batch (ms)", "Back"};
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
       int sel = ui.selectOption("ERP Push", options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 5) return;
+      if (sel == 6) return;
       ErpConfig cfg = copyErpConfig(ctx.erp().config());
       switch (sel) {
         case 0 -> ui.showLines("ERP Status", List.of(
@@ -1141,6 +1141,13 @@ public final class Main {
             String msg = ctx.erp().lastErrMsg();
             ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP test tags: failed" : "ERP test tags: failed (" + msg + ")");
           }
+        }
+        case 5 -> {
+          int ms = askInt(ui, "Batch ms (0=instant)", cfg.batchMs);
+          if (ms < 0) ms = 0;
+          cfg.batchMs = ms;
+          saveErpConfig(ctx.erp(), cfg);
+          ui.setStatusMessage("Batch ms set: " + ms);
         }
       }
     }
