@@ -1145,8 +1145,47 @@ public final class Main {
           }
         }
         case 5 -> {
-          int ms = askInt(ui, "Batch ms (0=instant)", cfg.batchMs);
-          if (ms < 0) ms = 0;
+          String[] items = {
+              "Instant (0 ms)",
+              "10 ms",
+              "20 ms",
+              "50 ms",
+              "100 ms",
+              "150 ms",
+              "200 ms",
+              "250 ms",
+              "500 ms",
+              "1000 ms"
+          };
+          int defIdx = switch (cfg.batchMs) {
+            case 0 -> 0;
+            case 10 -> 1;
+            case 20 -> 2;
+            case 50 -> 3;
+            case 100 -> 4;
+            case 150 -> 5;
+            case 200 -> 6;
+            case 250 -> 7;
+            case 500 -> 8;
+            case 1000 -> 9;
+            default -> 4;
+          };
+          int sel = ui.selectOption("Batch ms", items, defIdx);
+          if (sel == ConsoleUi.NAV_BACK) break;
+          if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+          int ms = switch (sel) {
+            case 0 -> 0;
+            case 1 -> 10;
+            case 2 -> 20;
+            case 3 -> 50;
+            case 4 -> 100;
+            case 5 -> 150;
+            case 6 -> 200;
+            case 7 -> 250;
+            case 8 -> 500;
+            case 9 -> 1000;
+            default -> 100;
+          };
           cfg.batchMs = ms;
           saveErpConfig(ctx.erp(), cfg);
           ui.setStatusMessage("Batch ms set: " + ms);
