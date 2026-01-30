@@ -112,6 +112,9 @@ public final class ConsoleUi {
           if (nav == NAV_RIGHT) {
             return NAV_FORWARD;
           }
+          if (nav == NAV_FORWARD) {
+            return idx;
+          }
         }
         if (ch == 'j' || ch == 'J') {
           idx = (idx + 1) % options.length;
@@ -173,6 +176,8 @@ public final class ConsoleUi {
             return NAV_BACK;
           } else if (nav == NAV_RIGHT) {
             return NAV_FORWARD;
+          } else if (nav == NAV_FORWARD) {
+            return idx;
           } else {
             continue;
           }
@@ -362,6 +367,9 @@ public final class ConsoleUi {
           }
           if (nav == NAV_RIGHT) {
             continue;
+          }
+          if (nav == NAV_FORWARD) {
+            break;
           }
         }
         if (ch == 'j' || ch == 'J') {
