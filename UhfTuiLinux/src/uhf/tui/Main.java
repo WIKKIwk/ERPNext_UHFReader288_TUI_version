@@ -690,7 +690,7 @@ public final class Main {
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
           "Main [" + status + "]",
-          new String[]{"Connection", "Scan/Auto", "Inventory", "Tag Ops", "Settings", "Command shell", "Quit"},
+          new String[]{"Connection", "Scan", "Inventory", "Tag Ops", "Settings", "Command shell", "Quit"},
           0
       );
       if (sel == ConsoleUi.NAV_BACK) {
@@ -714,7 +714,7 @@ public final class Main {
           forwardTarget = MenuId.CONNECTION;
         }
         case 1 -> {
-          menuScan(ui, ctx);
+          menuScan(ui, ctx, registry);
           forwardTarget = MenuId.SCAN;
         }
         case 2 -> {
@@ -857,64 +857,27 @@ public final class Main {
     }
   }
 
-  private static void menuScan(ConsoleUi ui, CommandContext ctx) {
+  private static void menuScan(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Scan", new String[]{"LAN auto-scan", "USB auto-scan", "Back"}, 0);
+      int sel = ui.selectOption("Scan", new String[]{"Start (auto)", "Stop", "Auto-connect", "Back"}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 2) return;
-      int readerType = selectReaderType(ui, 4);
-      if (readerType == ConsoleUi.NAV_BACK) return;
-      int log = selectLog(ui, 0);
-      if (log == ConsoleUi.NAV_BACK) return;
-      List<Integer> ports = choosePorts(ui);
-      if (ports == null) return;
-      List<String> prefixes;
-      if (sel == 1) {
-        prefixes = NetworkScanner.detectUsbPrefixes();
-        if (prefixes.isEmpty()) {
-          List<String> serials = NetworkScanner.detectSerialDevices();
-          if (!serials.isEmpty()) {
-            ui.println("USB serial device(s): " + String.join(", ", serials));
-            ui.println("Linux SDK USB/serial qo‘llamaydi. LAN (RNDIS/ECM) bo‘lsa ishlaydi.");
+      if (sel == 3) return;
+      switch (sel) {
+        case 0 -> {
+          if (!ctx.reader().isConnected()) {
+            attemptAutoConnect(ui, ctx);
           }
-          prefixes = NetworkScanner.detectPrefixes();
-        }
-      } else {
-        List<String> detected = NetworkScanner.detectPrefixes();
-        if (detected.isEmpty()) {
-          ui.setStatusMessage("No LAN prefixes found.");
-          continue;
-        }
-        PrefixChoice choice = chooseSubnetPrefix(ui, detected);
-        if (choice.cancelled()) return;
-        prefixes = choice.prefix() == null ? detected : List.of(choice.prefix());
-      }
-      if (prefixes.isEmpty()) {
-        ui.println("No LAN prefixes found.");
-        continue;
-      }
-      boolean connected = false;
-      for (String pfx : prefixes) {
-        for (int p : ports) {
-          ui.println("Scanning subnet " + pfx + ".0/24 on port " + p + " ...");
-          NetworkScanner.HostPort hp = NetworkScanner.findReader(
-              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
-          );
-          if (hp != null) {
-            Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
-            if (r.ok()) {
-              rememberConnection(hp.host(), hp.port(), readerType, log);
-              ui.println("Connected: " + hp.host() + "@" + hp.port());
-              connected = true;
-              break;
-            }
+          if (!ctx.reader().isConnected()) {
+            ui.setStatusMessage("No reader connected.");
+            continue;
           }
+          registry.execute(List.of("inv", "start"), ctx);
         }
-        if (connected) break;
+        case 1 -> registry.execute(List.of("inv", "stop"), ctx);
+        case 2 -> attemptAutoConnect(ui, ctx);
       }
-      if (!connected) ui.println("No reader found.");
     }
   }
 
