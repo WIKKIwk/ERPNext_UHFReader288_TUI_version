@@ -33,33 +33,37 @@ public final class Main {
     ReaderClient reader = new ReaderClient();
     ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
-    int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 18000);
-    List<String> agentUrls = listAgentUrls(agentPort);
-    AgentServer agent = new AgentServer(agentPort,
-        () -> new AgentServer.Status(reader.isConnected(), TAG_STATS.total(), TAG_STATS.rate()));
-    boolean agentOk = agent.start();
-    ERP_AGENT = new ErpAgentRegistrar(erp.config(), () -> listAgentUrls(agentPort));
+    int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 0);
+    boolean agentEnabled = agentPort > 0;
+    List<String> agentUrls = agentEnabled ? listAgentUrls(agentPort) : List.of();
+    AgentServer agent = agentEnabled
+        ? new AgentServer(agentPort, () -> new AgentServer.Status(reader.isConnected(), TAG_STATS.total(), TAG_STATS.rate()))
+        : null;
+    boolean agentOk = agentEnabled && agent.start();
+    ERP_AGENT = new ErpAgentRegistrar(erp.config(), () -> agentEnabled ? listAgentUrls(agentPort) : List.of());
 
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
     ui.println("Menu mode. Use ↑/↓ + Enter.");
-    if (agentOk) {
-      if (agentUrls.isEmpty()) {
-        ui.println("Local agent: http://127.0.0.1:" + agentPort + " (ERP online detector)");
-      } else {
-        ui.println("Agent URL (use in ERP settings):");
-        for (String url : agentUrls) {
-          ui.println("  " + url);
+    if (agentEnabled) {
+      if (agentOk) {
+        if (agentUrls.isEmpty()) {
+          ui.println("Agent HTTP enabled: http://127.0.0.1:" + agentPort);
+        } else {
+          ui.println("Agent HTTP URLs:");
+          for (String url : agentUrls) {
+            ui.println("  " + url);
+          }
         }
+      } else {
+        ui.println("Agent HTTP failed to start on port " + agentPort);
       }
-    } else {
-      ui.println("Local agent failed to start on port " + agentPort);
     }
 
     setupCommands(registry);
     try {
       menuLoop(ui, reader, erp, registry);
     } finally {
-      agent.stop();
+      if (agent != null) agent.stop();
       if (ERP_AGENT != null) ERP_AGENT.shutdown();
       erp.shutdown();
       reader.disconnect();
@@ -1012,9 +1016,14 @@ public final class Main {
           ui.setStatusMessage(TAG_OUTPUT.show ? "Tag output: ON" : "Tag output: OFF");
         }
         case 1 -> {
-          List<String> urls = listAgentUrls(parseInt(System.getenv("RFID_AGENT_PORT"), 18000));
+          int port = parseInt(System.getenv("RFID_AGENT_PORT"), 0);
+          if (port <= 0) {
+            ui.showLines("Agent URLs", List.of("Agent HTTP is disabled.", "Set RFID_AGENT_PORT to enable."));
+            break;
+          }
+          List<String> urls = listAgentUrls(port);
           if (urls.isEmpty()) {
-            ui.showLines("Agent URLs", List.of("No LAN IP found.", "Use: http://127.0.0.1:18000"));
+            ui.showLines("Agent URLs", List.of("No LAN IP found.", "Use: http://127.0.0.1:" + port));
           } else {
             ui.showLines("Agent URLs", urls);
           }
