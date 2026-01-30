@@ -9,6 +9,10 @@ import uhf.core.TagRead;
 public final class ConsoleUi {
   public static final int NAV_BACK = -1;
   public static final int NAV_FORWARD = -2;
+  public interface Translator {
+    String t(String en, String uz, String ru);
+  }
+  private static Translator translator = (en, uz, ru) -> en;
   private final Object lock = new Object();
   private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
   private int lastMenuLines = 0;
@@ -48,6 +52,14 @@ public final class ConsoleUi {
     synchronized (lock) {
       System.out.println(s);
     }
+  }
+
+  public static void setTranslator(Translator t) {
+    translator = t == null ? (en, uz, ru) -> en : t;
+  }
+
+  private String t(String en, String uz, String ru) {
+    return translator == null ? en : translator.t(en, uz, ru);
   }
 
   public void prompt() {
@@ -325,7 +337,7 @@ public final class ConsoleUi {
       }
       return;
     }
-    renderMessageBox(title, lines, "Press Enter to return");
+    renderMessageBox(title, lines, t("Press Enter to return", "Qaytish uchun Enter bosing", "Нажмите Enter чтобы вернуться"));
     waitForEnter();
     renderSwipeMenu(lastMenuLabel, lastMenuOptions, lastMenuIndex, false);
   }
@@ -462,7 +474,9 @@ public final class ConsoleUi {
 
   private void renderSwipeMenu(String label, String[] options, int idx, boolean first) {
     MenuStyle style = style();
-    String hint = style.fancy ? "↑/↓ move · Enter select · Esc back" : "Up/Down move, Enter select, Esc back";
+    String hint = style.fancy
+        ? t("↑/↓ move · Enter select · Esc back", "↑/↓ harakat · Enter tanlash · Esc orqaga", "↑/↓ движение · Enter выбор · Esc назад")
+        : t("Up/Down move, Enter select, Esc back", "Yuqori/Pastga harakat, Enter tanlash, Esc orqaga", "Вверх/Вниз, Enter выбор, Esc назад");
     String status = combineStatus();
     String input = inputPrompt == null ? "" : inputPrompt;
     String header = (headerLeft == null || headerLeft.isEmpty())
@@ -752,7 +766,9 @@ public final class ConsoleUi {
 
   private void renderLinesPage(String title, List<String> lines, int start, int size) {
     MenuStyle style = style();
-    String hint = style.fancy ? "↑/↓ scroll · Esc back" : "Up/Down scroll, Esc back";
+    String hint = style.fancy
+        ? t("↑/↓ scroll · Esc back", "↑/↓ aylantirish · Esc orqaga", "↑/↓ прокрутка · Esc назад")
+        : t("Up/Down scroll, Esc back", "Yuqori/Pastga aylantirish, Esc orqaga", "Вверх/Вниз прокрутка, Esc назад");
     String h = style.unicode ? "─" : "-";
     String v = style.unicode ? "│" : "|";
     String tl = style.unicode ? "┌" : "+";

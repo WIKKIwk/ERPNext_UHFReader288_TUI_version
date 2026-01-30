@@ -37,6 +37,7 @@ public final class Main {
     ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
     LANG = loadLang();
+    ConsoleUi.setTranslator(Main::L);
     int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 0);
     boolean agentEnabled = agentPort > 0;
     List<String> agentUrls = agentEnabled ? listAgentUrls(agentPort) : List.of();
@@ -46,20 +47,24 @@ public final class Main {
     boolean agentOk = agentEnabled && agent.start();
     ERP_AGENT = new ErpAgentRegistrar(erp.config(), () -> agentEnabled ? listAgentUrls(agentPort) : List.of());
 
-    ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
-    ui.println("Menu mode. Use ↑/↓ + Enter.");
+    ui.println(L(
+        "UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710",
+        "UhfTuiLinux - UHFReader288/ST-8504/E710 uchun Linux TUI",
+        "UhfTuiLinux - Linux TUI для UHFReader288/ST-8504/E710"
+    ));
+    ui.println(L("Menu mode. Use ↑/↓ + Enter.", "Menyu rejimi. ↑/↓ + Enter ni ishlating.", "Режим меню. Используйте ↑/↓ + Enter."));
     if (agentEnabled) {
       if (agentOk) {
         if (agentUrls.isEmpty()) {
-          ui.println("Agent HTTP enabled: http://127.0.0.1:" + agentPort);
+          ui.println(L("Agent HTTP enabled: ", "Agent HTTP yoqildi: ", "Agent HTTP включен: ") + "http://127.0.0.1:" + agentPort);
         } else {
-          ui.println("Agent HTTP URLs:");
+          ui.println(L("Agent HTTP URLs:", "Agent HTTP URLlari:", "Agent HTTP URL-адреса:"));
           for (String url : agentUrls) {
             ui.println("  " + url);
           }
         }
       } else {
-        ui.println("Agent HTTP failed to start on port " + agentPort);
+        ui.println(L("Agent HTTP failed to start on port ", "Agent HTTP ishga tushmadi, port: ", "Agent HTTP не запустился, порт: ") + agentPort);
       }
     }
 
@@ -81,7 +86,9 @@ public final class Main {
         return;
       }
       if (ctx.reader().isConnected()) {
-        ctx.ui().println("Already connected. Use 'disconnect' first.");
+        ctx.ui().println(L("Already connected. Use 'disconnect' first.",
+            "Allaqachon ulangan. Avval 'disconnect' qiling.",
+            "Уже подключено. Сначала выполните 'disconnect'."));
         return;
       }
       String ip = args.get(1);
@@ -91,25 +98,27 @@ public final class Main {
 
       Result r = ctx.reader().connect(ip, port, readerType, log, tag -> handleTag(ctx, tag), () -> {});
       if (!r.ok()) {
-        ctx.ui().println("Connect failed: " + r.code());
+        ctx.ui().println(L("Connect failed: ", "Ulanish xato: ", "Ошибка подключения: ") + r.code());
         return;
       }
       rememberConnection(ip, port, readerType, log);
-      ctx.ui().println("Connected: " + ip + "@" + port + " (readerType=" + readerType + ")");
+      ctx.ui().println(L("Connected: ", "Ulandi: ", "Подключено: ") + ip + "@" + port + " (readerType=" + readerType + ")");
     });
 
     registry.register("disconnect", "disconnect", (args, ctx) -> {
       Result r = ctx.reader().disconnect();
       if (!r.ok()) {
-        ctx.ui().println("Disconnect failed: " + r.code());
+        ctx.ui().println(L("Disconnect failed: ", "Uzish xato: ", "Ошибка отключения: ") + r.code());
       } else {
-        ctx.ui().println("Disconnected.");
+        ctx.ui().println(L("Disconnected.", "Uzildi.", "Отключено."));
       }
     }, "disc");
 
     registry.register("scan", "scan [ports|auto|auto+] [readerType] [log] [prefix]", (args, ctx) -> {
       if (ctx.reader().isConnected()) {
-        ctx.ui().println("Already connected. Use 'disconnect' first.");
+        ctx.ui().println(L("Already connected. Use 'disconnect' first.",
+            "Allaqachon ulangan. Avval 'disconnect' qiling.",
+            "Уже подключено. Сначала выполните 'disconnect'."));
         return;
       }
       List<Integer> ports = args.size() >= 2
@@ -123,32 +132,35 @@ public final class Main {
           ? NetworkScanner.detectPrefixes()
           : List.of(prefix.trim());
       if (prefixes.isEmpty()) {
-        ctx.ui().println("No LAN prefixes found. Provide prefix like 192.168.1");
+        ctx.ui().println(L("No LAN prefixes found. Provide prefix like 192.168.1",
+            "LAN prefiks topilmadi. Masalan: 192.168.1",
+            "LAN префиксы не найдены. Пример: 192.168.1"));
         return;
       }
 
       for (String pfx : prefixes) {
         for (int p : ports) {
-          ctx.ui().println("Scanning subnet " + pfx + ".0/24 on port " + p + " ...");
+          ctx.ui().println(L("Scanning subnet ", "Subnet skan: ", "Сканирование подсети ") + pfx + ".0/24 "
+              + L("on port ", "port: ", "порт ") + p + " ...");
           NetworkScanner.HostPort hp = NetworkScanner.findReader(
               List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
           );
           if (hp != null) {
             Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
             if (r.ok()) {
-              ctx.ui().println("Connected: " + hp.host() + "@" + hp.port());
+              ctx.ui().println(L("Connected: ", "Ulandi: ", "Подключено: ") + hp.host() + "@" + hp.port());
               return;
             }
           }
         }
       }
-      ctx.ui().println("No reader found.");
+      ctx.ui().println(L("No reader found.", "Reader topilmadi.", "Ридер не найден."));
     });
 
     registry.register("info", "info", (args, ctx) -> {
       ReaderInfo info = ctx.reader().getInfo();
       if (!info.result().ok()) {
-        ctx.ui().println("GetUHFInformation failed: " + info.result().code());
+        ctx.ui().println(L("GetUHFInformation failed: ", "GetUHFInformation xato: ", "GetUHFInformation ошибка: ") + info.result().code());
         return;
       }
       ctx.ui().println(
@@ -165,9 +177,9 @@ public final class Main {
     registry.register("serial", "serial", (args, ctx) -> {
       String sn = ctx.reader().getSerialNumber();
       if (sn == null || sn.isBlank()) {
-        ctx.ui().println("Serial number not available.");
+        ctx.ui().println(L("Serial number not available.", "Seriya raqami mavjud emas.", "Серийный номер недоступен."));
       } else {
-        ctx.ui().println("Serial: " + sn);
+        ctx.ui().println(L("Serial: ", "Seriya: ", "Серийный: ") + sn);
       }
     });
 
@@ -178,11 +190,13 @@ public final class Main {
       }
       int p = parseInt(args.get(1), -1);
       if (p < 0) {
-        ctx.ui().println("Invalid power.");
+        ctx.ui().println(L("Invalid power.", "Noto'g'ri quvvat.", "Неверная мощность."));
         return;
       }
       Result r = ctx.reader().setPower(p);
-      ctx.ui().println(r.ok() ? "Power set: " + p : "SetRfPower failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Power set: ", "Quvvat o'rnatildi: ", "Мощность установлена: ") + p
+          : L("SetRfPower failed: ", "SetRfPower xato: ", "SetRfPower ошибка: ") + r.code());
     });
 
     registry.register("antpower", "antpower get | set <0-33> [count]", (args, ctx) -> {
@@ -191,7 +205,7 @@ public final class Main {
         return;
       }
       if (!ctx.reader().isConnected()) {
-        ctx.ui().println("Not connected.");
+        ctx.ui().println(L("Not connected.", "Ulanmagan.", "Не подключено."));
         return;
       }
       String sub = args.get(1).toLowerCase();
@@ -253,35 +267,41 @@ public final class Main {
       int ant = parseInt(args.get(1), -1);
       double freq = parseDouble(args.get(2), -1);
       if (ant < 0 || freq <= 0) {
-        ctx.ui().println("Invalid antenna or frequency.");
+        ctx.ui().println(L("Invalid antenna or frequency.", "Antenna yoki chastota noto'g'ri.", "Неверная антенна или частота."));
         return;
       }
       int freqKhz = (int) Math.round(freq * 1000.0);
       ReturnLossInfo info = ctx.reader().measureReturnLoss(ant, freqKhz);
       if (!info.result().ok()) {
-        ctx.ui().println("MeasureReturnLoss failed: " + info.result().code());
+        ctx.ui().println(L("MeasureReturnLoss failed: ", "MeasureReturnLoss xato: ", "MeasureReturnLoss ошибка: ") + info.result().code());
       } else {
-        ctx.ui().println("ReturnLoss ant=" + ant + " freq=" + formatMHz(freq) + " loss=" + info.lossDb() + " dB");
+        ctx.ui().println(L("ReturnLoss ", "ReturnLoss ", "ReturnLoss ")
+            + L("ant=", "ant=", "ант=") + ant + " "
+            + L("freq=", "chastota=", "частота=") + formatMHz(freq) + " "
+            + L("loss=", "yo'qotish=", "потери=") + info.lossDb() + " dB");
       }
     });
 
     registry.register("wpower", "wpower get | set <0-33> [mode]", (args, ctx) -> {
       if (args.size() < 2) {
         ctx.ui().println("Usage: wpower get | set <0-33> [mode]");
-        ctx.ui().println("mode: 0=normal, 1=high (default=0)");
+        ctx.ui().println(L("mode: 0=normal, 1=high (default=0)",
+            "rejim: 0=oddiy, 1=yuqori (standart=0)",
+            "режим: 0=обычный, 1=высокий (по умолч.=0)"));
         return;
       }
       if (!ctx.reader().isConnected()) {
-        ctx.ui().println("Not connected.");
+        ctx.ui().println(L("Not connected.", "Ulanmagan.", "Не подключено."));
         return;
       }
       String sub = args.get(1).toLowerCase();
       if (sub.equals("get")) {
         WritePowerInfo info = ctx.reader().getWritePower();
         if (!info.result().ok()) {
-          ctx.ui().println("GetWritePower failed: " + info.result().code());
+          ctx.ui().println(L("GetWritePower failed: ", "GetWritePower xato: ", "GetWritePower ошибка: ") + info.result().code());
         } else {
-          ctx.ui().println("WritePower=" + info.power() + " dBm mode=" + (info.highMode() ? "high" : "normal"));
+          ctx.ui().println(L("WritePower=", "Yozish quvvati=", "Мощность записи=") + info.power()
+              + " dBm " + L("mode=", "rejim=", "режим=") + (info.highMode() ? L("high", "yuqori", "высокий") : L("normal", "oddiy", "обычный")));
         }
         return;
       }
@@ -292,14 +312,16 @@ public final class Main {
         }
         int p = parseInt(args.get(2), -1);
         if (p < 0 || p > 33) {
-          ctx.ui().println("Invalid power.");
+          ctx.ui().println(L("Invalid power.", "Noto'g'ri quvvat.", "Неверная мощность."));
           return;
         }
         int mode = args.size() >= 4 ? parseInt(args.get(3), 0) : 0;
         boolean high = mode == 1;
         Result r = ctx.reader().setWritePower(p, high);
-        ctx.ui().println(r.ok() ? "Write power set: " + p + " (" + (high ? "high" : "normal") + ")"
-            : "SetWritePower failed: " + r.code());
+        ctx.ui().println(r.ok()
+            ? L("Write power set: ", "Yozish quvvati o'rnatildi: ", "Мощность записи установлена: ") + p
+            + " (" + (high ? L("high", "yuqori", "высокий") : L("normal", "oddiy", "обычный")) + ")"
+            : L("SetWritePower failed: ", "SetWritePower xato: ", "SetWritePower ошибка: ") + r.code());
         return;
       }
       ctx.ui().println("Usage: wpower get | set <0-33> [mode]");
@@ -314,11 +336,13 @@ public final class Main {
       int max = parseInt(args.get(2), -1);
       int min = parseInt(args.get(3), -1);
       if (band < 0 || max < 0 || min < 0) {
-        ctx.ui().println("Invalid region parameters.");
+        ctx.ui().println(L("Invalid region parameters.", "Mintaqa parametrlari noto'g'ri.", "Неверные параметры региона."));
         return;
       }
       Result r = ctx.reader().setRegion(band, max, min);
-      ctx.ui().println(r.ok() ? "Region set." : "SetRegion failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Region set.", "Mintaqa o'rnatildi.", "Регион установлен.")
+          : L("SetRegion failed: ", "SetRegion xato: ", "SetRegion ошибка: ") + r.code());
     });
 
     registry.register("beep", "beep <0|1>", (args, ctx) -> {
@@ -328,11 +352,13 @@ public final class Main {
       }
       int v = parseInt(args.get(1), -1);
       if (v != 0 && v != 1) {
-        ctx.ui().println("Invalid beep value.");
+        ctx.ui().println(L("Invalid beep value.", "Noto'g'ri signal qiymati.", "Неверное значение сигнала."));
         return;
       }
       Result r = ctx.reader().setBeep(v);
-      ctx.ui().println(r.ok() ? "Beep set: " + v : "SetBeepNotification failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Beep set: ", "Signal o'rnatildi: ", "Сигнал установлен: ") + v
+          : L("SetBeepNotification failed: ", "SetBeepNotification xato: ", "SetBeepNotification ошибка: ") + r.code());
     });
 
     registry.register("erp", "erp status | enable | disable | set <url> <token>", (args, ctx) -> {
@@ -396,9 +422,9 @@ public final class Main {
       if (sub.equals("get")) {
         GpioStatus st = ctx.reader().getGpio();
         if (!st.result().ok()) {
-          ctx.ui().println("GetGPIOStatus failed: " + st.result().code());
+          ctx.ui().println(L("GetGPIOStatus failed: ", "GetGPIOStatus xato: ", "GetGPIOStatus ошибка: ") + st.result().code());
         } else {
-          ctx.ui().println("GPIO mask: 0x" + Integer.toHexString(st.mask()));
+          ctx.ui().println(L("GPIO mask: ", "GPIO maska: ", "GPIO маска: ") + "0x" + Integer.toHexString(st.mask()));
         }
         return;
       }
@@ -409,11 +435,13 @@ public final class Main {
         }
         int mask = parseInt(args.get(2), -1);
         if (mask < 0) {
-          ctx.ui().println("Invalid mask.");
+          ctx.ui().println(L("Invalid mask.", "Noto'g'ri maska.", "Неверная маска."));
           return;
         }
         Result r = ctx.reader().setGpio(mask);
-        ctx.ui().println(r.ok() ? "GPIO set: 0x" + Integer.toHexString(mask) : "SetGPIO failed: " + r.code());
+        ctx.ui().println(r.ok()
+            ? L("GPIO set: ", "GPIO o'rnatildi: ", "GPIO установлено: ") + "0x" + Integer.toHexString(mask)
+            : L("SetGPIO failed: ", "SetGPIO xato: ", "SetGPIO ошибка: ") + r.code());
         return;
       }
       ctx.ui().println("Usage: gpio get | gpio set <mask>");
@@ -426,11 +454,13 @@ public final class Main {
       }
       int v = parseInt(args.get(1), -1);
       if (v < 0) {
-        ctx.ui().println("Invalid relay value.");
+        ctx.ui().println(L("Invalid relay value.", "Noto'g'ri rele qiymati.", "Неверное значение реле."));
         return;
       }
       Result r = ctx.reader().setRelay(v);
-      ctx.ui().println(r.ok() ? "Relay set: " + v : "SetRelay failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Relay set: ", "Rele o'rnatildi: ", "Реле установлено: ") + v
+          : L("SetRelay failed: ", "SetRelay xato: ", "SetRelay ошибка: ") + r.code());
     });
 
     registry.register("antenna", "antenna <arg1> <arg2>", (args, ctx) -> {
@@ -442,11 +472,13 @@ public final class Main {
       int a1 = parseInt(args.get(1), -1);
       int a2 = parseInt(args.get(2), -1);
       if (a1 < 0 || a2 < 0) {
-        ctx.ui().println("Invalid antenna args.");
+        ctx.ui().println(L("Invalid antenna args.", "Noto'g'ri antenna argumentlari.", "Неверные аргументы антенны."));
         return;
       }
       Result r = ctx.reader().setAntenna(a1, a2);
-      ctx.ui().println(r.ok() ? "Antenna set." : "SetAntenna failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Antenna set.", "Antenna o'rnatildi.", "Антенна установлена.")
+          : L("SetAntenna failed: ", "SetAntenna xato: ", "SetAntenna ошибка: ") + r.code());
     });
 
     registry.register("read-epc", "read-epc <epc> <mem> <wordPtr> <num> <password>", (args, ctx) -> {
@@ -460,14 +492,14 @@ public final class Main {
       int num = parseInt(args.get(4), -1);
       String pwd = args.get(5);
       if (mem < 0 || wordPtr < 0 || num <= 0) {
-        ctx.ui().println("Invalid parameters.");
+        ctx.ui().println(L("Invalid parameters.", "Noto'g'ri parametrlar.", "Неверные параметры."));
         return;
       }
       String data = ctx.reader().readDataByEpc(epc, mem, wordPtr, num, pwd);
       if (data == null) {
-        ctx.ui().println("Read failed.");
+        ctx.ui().println(L("Read failed.", "O'qish xato.", "Чтение не удалось."));
       } else {
-        ctx.ui().println("Data: " + data);
+        ctx.ui().println(L("Data: ", "Ma'lumot: ", "Данные: ") + data);
       }
     });
 
@@ -482,14 +514,14 @@ public final class Main {
       int num = parseInt(args.get(4), -1);
       String pwd = args.get(5);
       if (mem < 0 || wordPtr < 0 || num <= 0) {
-        ctx.ui().println("Invalid parameters.");
+        ctx.ui().println(L("Invalid parameters.", "Noto'g'ri parametrlar.", "Неверные параметры."));
         return;
       }
       String data = ctx.reader().readDataByTid(tid, mem, wordPtr, num, pwd);
       if (data == null) {
-        ctx.ui().println("Read failed.");
+        ctx.ui().println(L("Read failed.", "O'qish xato.", "Чтение не удалось."));
       } else {
-        ctx.ui().println("Data: " + data);
+        ctx.ui().println(L("Data: ", "Ma'lumot: ", "Данные: ") + data);
       }
     });
 
@@ -498,18 +530,20 @@ public final class Main {
         ctx.ui().println("Usage: write-epc <epc> <mem> <wordPtr> <password> <data>");
         return;
       }
-      if (!ctx.ui().confirm("Write EPC memory?")) return;
+      if (!ctx.ui().confirm(L("Write EPC memory?", "EPC xotirasiga yozilsinmi?", "Записать память EPC?"))) return;
       String epc = args.get(1);
       int mem = parseInt(args.get(2), -1);
       int wordPtr = parseInt(args.get(3), -1);
       String pwd = args.get(4);
       String data = args.get(5);
       if (mem < 0 || wordPtr < 0) {
-        ctx.ui().println("Invalid parameters.");
+        ctx.ui().println(L("Invalid parameters.", "Noto'g'ri parametrlar.", "Неверные параметры."));
         return;
       }
       Result r = ctx.reader().writeDataByEpc(epc, mem, wordPtr, pwd, data);
-      ctx.ui().println(r.ok() ? "Write success." : "Write failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Write success.", "Yozish muvaffaqiyatli.", "Запись успешна.")
+          : L("Write failed: ", "Yozish xato: ", "Ошибка записи: ") + r.code());
     });
 
     registry.register("write-tid", "write-tid <tid> <mem> <wordPtr> <password> <data>", (args, ctx) -> {
@@ -517,18 +551,20 @@ public final class Main {
         ctx.ui().println("Usage: write-tid <tid> <mem> <wordPtr> <password> <data>");
         return;
       }
-      if (!ctx.ui().confirm("Write TID memory?")) return;
+      if (!ctx.ui().confirm(L("Write TID memory?", "TID xotirasiga yozilsinmi?", "Записать память TID?"))) return;
       String tid = args.get(1);
       int mem = parseInt(args.get(2), -1);
       int wordPtr = parseInt(args.get(3), -1);
       String pwd = args.get(4);
       String data = args.get(5);
       if (mem < 0 || wordPtr < 0) {
-        ctx.ui().println("Invalid parameters.");
+        ctx.ui().println(L("Invalid parameters.", "Noto'g'ri parametrlar.", "Неверные параметры."));
         return;
       }
       Result r = ctx.reader().writeDataByTid(tid, mem, wordPtr, pwd, data);
-      ctx.ui().println(r.ok() ? "Write success." : "Write failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Write success.", "Yozish muvaffaqiyatli.", "Запись успешна.")
+          : L("Write failed: ", "Yozish xato: ", "Ошибка записи: ") + r.code());
     });
 
     registry.register("write-epc-id", "write-epc-id <epc> <password>", (args, ctx) -> {
@@ -536,11 +572,13 @@ public final class Main {
         ctx.ui().println("Usage: write-epc-id <epc> <password>");
         return;
       }
-      if (!ctx.ui().confirm("Overwrite EPC ID?")) return;
+      if (!ctx.ui().confirm(L("Overwrite EPC ID?", "EPC ID ustiga yozilsinmi?", "Перезаписать EPC ID?"))) return;
       String epc = args.get(1);
       String pwd = args.get(2);
       Result r = ctx.reader().writeEpc(epc, pwd);
-      ctx.ui().println(r.ok() ? "EPC updated." : "WriteEPC failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("EPC updated.", "EPC yangilandi.", "EPC обновлён.")
+          : L("WriteEPC failed: ", "WriteEPC xato: ", "WriteEPC ошибка: ") + r.code());
     });
 
     registry.register("write-epc-by-tid", "write-epc-by-tid <tid> <epc> <password>", (args, ctx) -> {
@@ -548,12 +586,14 @@ public final class Main {
         ctx.ui().println("Usage: write-epc-by-tid <tid> <epc> <password>");
         return;
       }
-      if (!ctx.ui().confirm("Overwrite EPC by TID?")) return;
+      if (!ctx.ui().confirm(L("Overwrite EPC by TID?", "TID orqali EPC ustiga yozilsinmi?", "Перезаписать EPC по TID?"))) return;
       String tid = args.get(1);
       String epc = args.get(2);
       String pwd = args.get(3);
       Result r = ctx.reader().writeEpcByTid(tid, epc, pwd);
-      ctx.ui().println(r.ok() ? "EPC updated." : "WriteEPCByTID failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("EPC updated.", "EPC yangilandi.", "EPC обновлён.")
+          : L("WriteEPCByTID failed: ", "WriteEPCByTID xato: ", "WriteEPCByTID ошибка: ") + r.code());
     });
 
     registry.register("lock", "lock <epc> <select> <protect> <password>", (args, ctx) -> {
@@ -561,17 +601,21 @@ public final class Main {
         ctx.ui().println("Usage: lock <epc> <select> <protect> <password>");
         return;
       }
-      if (!ctx.ui().confirm("Lock tag memory? This may be irreversible.")) return;
+      if (!ctx.ui().confirm(L("Lock tag memory? This may be irreversible.",
+          "Tag xotirasini qulflaysizmi? Qaytarib bo'lmasligi mumkin.",
+          "Заблокировать память тега? Это может быть необратимо."))) return;
       String epc = args.get(1);
       int select = parseInt(args.get(2), -1);
       int protect = parseInt(args.get(3), -1);
       String pwd = args.get(4);
       if (select < 0 || protect < 0) {
-        ctx.ui().println("Invalid parameters.");
+        ctx.ui().println(L("Invalid parameters.", "Noto'g'ri parametrlar.", "Неверные параметры."));
         return;
       }
       Result r = ctx.reader().lock(epc, select, protect, pwd);
-      ctx.ui().println(r.ok() ? "Lock success." : "Lock failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Lock success.", "Qulflash muvaffaqiyatli.", "Блокировка успешна.")
+          : L("Lock failed: ", "Qulflash xato: ", "Ошибка блокировки: ") + r.code());
     });
 
     registry.register("kill", "kill <epc> <password>", (args, ctx) -> {
@@ -579,11 +623,15 @@ public final class Main {
         ctx.ui().println("Usage: kill <epc> <password>");
         return;
       }
-      if (!ctx.ui().confirm("KILL tag? This is permanent and irreversible.")) return;
+      if (!ctx.ui().confirm(L("KILL tag? This is permanent and irreversible.",
+          "Tagni o'chirasizmi? Bu qaytarib bo'lmaydi.",
+          "Уничтожить тег? Это необратимо."))) return;
       String epc = args.get(1);
       String pwd = args.get(2);
       Result r = ctx.reader().kill(epc, pwd);
-      ctx.ui().println(r.ok() ? "Kill success." : "Kill failed: " + r.code());
+      ctx.ui().println(r.ok()
+          ? L("Kill success.", "O'chirish muvaffaqiyatli.", "Уничтожение успешно.")
+          : L("Kill failed: ", "O'chirish xato: ", "Ошибка уничтожения: ") + r.code());
     });
 
     registry.register("inv", "inv start|stop", (args, ctx) -> {
@@ -594,12 +642,16 @@ public final class Main {
       String sub = args.get(1).toLowerCase();
       if (sub.equals("start")) {
         Result r = ctx.reader().startInventory();
-        ctx.ui().println(r.ok() ? "Inventory started." : "StartRead failed: " + r.code());
+        ctx.ui().println(r.ok()
+            ? L("Inventory started.", "Inventar boshlandi.", "Инвентарь запущен.")
+            : L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + r.code());
         return;
       }
       if (sub.equals("stop")) {
         Result r = ctx.reader().stopInventory();
-        ctx.ui().println(r.ok() ? "Inventory stopped." : "StopRead failed: " + r.code());
+        ctx.ui().println(r.ok()
+            ? L("Inventory stopped.", "Inventar to'xtadi.", "Инвентарь остановлен.")
+            : L("StopRead failed: ", "StopRead xato: ", "StopRead ошибка: ") + r.code());
         return;
       }
       ctx.ui().println("Usage: inv start|stop");
@@ -610,17 +662,19 @@ public final class Main {
       if (ms < 50) ms = 50;
       Result r = ctx.reader().startInventory();
       if (!r.ok()) {
-        ctx.ui().println("StartRead failed: " + r.code());
+        ctx.ui().println(L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + r.code());
         return;
       }
-      ctx.ui().println("Scanning for " + ms + " ms ...");
+      ctx.ui().println(L("Scanning for ", "Skan qilinmoqda ", "Сканирование ") + ms + " ms ...");
       try {
         Thread.sleep(ms);
       } catch (InterruptedException ignored) {
         Thread.currentThread().interrupt();
       }
       Result stop = ctx.reader().stopInventory();
-      ctx.ui().println(stop.ok() ? "Scan stopped." : "StopRead failed: " + stop.code());
+      ctx.ui().println(stop.ok()
+          ? L("Scan stopped.", "Skan to'xtadi.", "Сканирование остановлено.")
+          : L("StopRead failed: ", "StopRead xato: ", "StopRead ошибка: ") + stop.code());
     }, "once");
 
     registry.register("inv-param", "inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]",
@@ -630,7 +684,7 @@ public final class Main {
             return;
           }
           if (!ctx.reader().isConnected()) {
-            ctx.ui().println("Not connected.");
+            ctx.ui().println(L("Not connected.", "Ulanmagan.", "Не подключено."));
             return;
           }
           String sub = args.get(1).toLowerCase();
@@ -657,12 +711,16 @@ public final class Main {
               InventoryParams p = new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
                   readType, readMem, readPtr, readLen, password);
               Result r = ctx.reader().setInventoryParams(p);
-              ctx.ui().println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+              ctx.ui().println(r.ok()
+                  ? L("Inventory params updated.", "Inventar parametrlari yangilandi.", "Параметры обновлены.")
+                  : L("SetInventoryParameter failed: ", "SetInventoryParameter xato: ", "SetInventoryParameter ошибка: ") + r.code());
               return;
             }
             InventoryParams p = promptInventoryParams(ctx.ui(), current);
             Result r = ctx.reader().setInventoryParams(p);
-            ctx.ui().println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+            ctx.ui().println(r.ok()
+                ? L("Inventory params updated.", "Inventar parametrlari yangilandi.", "Параметры обновлены.")
+                : L("SetInventoryParameter failed: ", "SetInventoryParameter xato: ", "SetInventoryParameter ошибка: ") + r.code());
             return;
           }
           ctx.ui().println("Usage: inv-param get | set [session q scanTime readType readMem readPtr readLen tidPtr tidLen antenna password [address]]");
@@ -670,13 +728,13 @@ public final class Main {
   }
 
   private static void printHelp(CommandRegistry registry, ConsoleUi ui) {
-    ui.println("Commands:");
+    ui.println(L("Commands:", "Buyruqlar:", "Команды:"));
     for (var def : registry.listUnique()) {
       ui.println("  " + def.name() + " - " + def.help());
     }
-    ui.println("  help - show this help");
-    ui.println("  menu - back to menu");
-    ui.println("  quit - exit");
+    ui.println("  help - " + L("show this help", "yordamni ko'rsatish", "показать справку"));
+    ui.println("  menu - " + L("back to menu", "menyuga qaytish", "вернуться в меню"));
+    ui.println("  quit - " + L("exit", "chiqish", "выход"));
   }
 
   private static void menuLoop(ConsoleUi ui, ReaderClient reader, ErpPusher erp, CommandRegistry registry) {
@@ -689,7 +747,9 @@ public final class Main {
         attemptAutoConnect(ui, ctx);
       }
       updateStatus(ui, reader, erp);
-      String status = reader.isConnected() ? "connected" : "disconnected";
+      String status = reader.isConnected()
+          ? L("connected", "ulangan", "подключено")
+          : L("disconnected", "uzilgan", "отключено");
       int sel = ui.selectOption(
           L("Main", "Asosiy", "Главная") + " [" + status + "]",
           new String[]{
@@ -792,7 +852,7 @@ public final class Main {
       if (isPortOpen(last.host, last.port, 150)) {
         Result r = ctx.reader().connect(last.host, last.port, readerType, log, tag -> handleTag(ctx, tag), () -> {});
         if (r.ok()) {
-          ui.setStatusMessage("Auto-connect: " + last.host + "@" + last.port);
+          ui.setStatusMessage(L("Auto-connect: ", "Avto-ulan: ", "Автоподключение: ") + last.host + "@" + last.port);
           return;
         }
       }
@@ -805,13 +865,13 @@ public final class Main {
       if (!all.contains(p)) all.add(p);
     }
     if (all.isEmpty()) {
-      ui.setStatusMessage("Auto-connect: no LAN/USB prefixes found.");
+      ui.setStatusMessage(L("Auto-connect: no LAN/USB prefixes found.", "Avto-ulan: LAN/USB prefikslar topilmadi.", "Автоподключение: LAN/USB префиксы не найдены."));
       return;
     }
     final NetworkScanner.HostPort[] found = {null};
     final int rt = readerType;
     final int lg = log;
-    ui.runWithSpinner("Auto-connecting", () -> {
+    ui.runWithSpinner(L("Auto-connecting", "Avto-ulanmoqda", "Автоподключение"), () -> {
       for (String pfx : all) {
         for (int p : ports) {
           NetworkScanner.HostPort hp = NetworkScanner.findReader(
@@ -825,35 +885,39 @@ public final class Main {
       }
     });
     if (found[0] == null) {
-      ui.setStatusMessage("Auto-connect: no reader found.");
+      ui.setStatusMessage(L("Auto-connect: no reader found.", "Avto-ulan: reader topilmadi.", "Автоподключение: ридер не найден."));
       return;
     }
     NetworkScanner.HostPort hp = found[0];
     Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
     if (r.ok()) {
       rememberConnection(hp.host(), hp.port(), readerType, log);
-      ui.setStatusMessage("Auto-connect: " + hp.host() + "@" + hp.port());
+      ui.setStatusMessage(L("Auto-connect: ", "Avto-ulan: ", "Автоподключение: ") + hp.host() + "@" + hp.port());
     } else {
-      ui.setStatusMessage("Auto-connect failed: " + r.code());
+      ui.setStatusMessage(L("Auto-connect failed: ", "Avto-ulan xato: ", "Автоподключение ошибка: ") + r.code());
     }
   }
 
   private static void menuAbout(ConsoleUi ui) {
     List<String> lines = readReadmeLines();
     if (lines.isEmpty()) {
-      ui.showLines("About", List.of(
-          "README.md not found.",
-          "Expected in current folder or parent."
+      ui.showLines(L("About", "Haqida", "О программе"), List.of(
+          L("README.md not found.", "README.md topilmadi.", "README.md не найден."),
+          L("Expected in current folder or parent.", "Joriy papka yoki yuqori papkada kutilgan.", "Ожидался в текущей или родительской папке.")
       ));
       return;
     }
-    ui.viewLinesPaged("About (README)", lines, 12);
+    ui.viewLinesPaged(L("About (README)", "Haqida (README)", "О программе (README)"), lines, 12);
   }
 
   private static void menuConnection(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Connection", new String[]{"Connect", "Disconnect", "Back"}, 0);
+      int sel = ui.selectOption(
+          L("Connection", "Ulanish", "Подключение"),
+          new String[]{L("Connect", "Ulanish", "Подключить"), L("Disconnect", "Uzish", "Отключить"), L("Back", "Orqaga", "Назад")},
+          0
+      );
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
@@ -861,12 +925,12 @@ public final class Main {
         registry.execute(List.of("disconnect"), ctx);
         continue;
       }
-      String ip = askString(ui, "IP address");
+      String ip = askString(ui, L("IP address", "IP manzil", "IP адрес"));
       if (ip == null || ip.isBlank()) {
-        ui.println("IP is required.");
+        ui.println(L("IP is required.", "IP kiritilishi shart.", "IP обязателен."));
         continue;
       }
-      int port = askInt(ui, "Port", 27011);
+      int port = askInt(ui, L("Port", "Port", "Порт"), 27011);
       int readerType = selectReaderType(ui, 4);
       if (readerType == ConsoleUi.NAV_BACK) return;
       int log = selectLog(ui, 0);
@@ -878,7 +942,16 @@ public final class Main {
   private static void menuScan(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Scan", new String[]{"Start (auto)", "Stop", "Auto-connect", "Back"}, 0);
+      int sel = ui.selectOption(
+          L("Scan", "Skanner", "Скан"),
+          new String[]{
+              L("Start (auto)", "Boshlash (auto)", "Старт (авто)"),
+              L("Stop", "To'xtatish", "Стоп"),
+              L("Auto-connect", "Avto-ulan", "Автоподключение"),
+              L("Back", "Orqaga", "Назад")
+          },
+          0
+      );
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 3) return;
@@ -888,7 +961,7 @@ public final class Main {
             attemptAutoConnect(ui, ctx);
           }
           if (!ctx.reader().isConnected()) {
-            ui.setStatusMessage("No reader connected.");
+            ui.setStatusMessage(L("No reader connected.", "Reader ulanmagan.", "Ридер не подключен."));
             continue;
           }
           registry.execute(List.of("inv", "start"), ctx);
@@ -921,20 +994,31 @@ public final class Main {
   private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Inventory", new String[]{"Start", "Stop", "Once (timed)", "Params (view)", "Params (set)", "Back"}, 0);
+      int sel = ui.selectOption(
+          L("Inventory", "Inventar", "Инвентарь"),
+          new String[]{
+              L("Start", "Boshlash", "Старт"),
+              L("Stop", "To'xtatish", "Стоп"),
+              L("Once (timed)", "Bir marta (vaqt)", "Один раз (время)"),
+              L("Params (view)", "Param (ko'rish)", "Параметры (просм.)"),
+              L("Params (set)", "Param (sozlash)", "Параметры (установ.)"),
+              L("Back", "Orqaga", "Назад")
+          },
+          0
+      );
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 5) return;
       if (sel == 0) registry.execute(List.of("inv", "start"), ctx);
       if (sel == 1) registry.execute(List.of("inv", "stop"), ctx);
       if (sel == 2) {
-        int ms = askInt(ui, "Duration ms", 1000);
+        int ms = askInt(ui, L("Duration ms", "Davomiylik (ms)", "Длительность (мс)"), 1000);
         registry.execute(List.of("inv-once", String.valueOf(ms)), ctx);
         pause(ui);
       }
       if (sel == 3) {
         if (!ctx.reader().isConnected()) {
-          ui.setStatusMessage("Not connected.");
+          ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
           continue;
         }
         InventoryParams p = ctx.reader().getInventoryParams();
@@ -942,13 +1026,14 @@ public final class Main {
       }
       if (sel == 4) {
         if (!ctx.reader().isConnected()) {
-          ui.setStatusMessage("Not connected.");
+          ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
           continue;
         }
         InventoryParams current = ctx.reader().getInventoryParams();
         InventoryParams p = promptInventoryParams(ui, current);
         Result r = ctx.reader().setInventoryParams(p);
-        ui.println(r.ok() ? "Inventory params updated." : "SetInventoryParameter failed: " + r.code());
+        ui.println(r.ok() ? L("Inventory params updated.", "Inventar parametrlari yangilandi.", "Параметры обновлены.")
+            : L("SetInventoryParameter failed: ", "SetInventoryParameter xatosi: ", "Ошибка SetInventoryParameter: ") + r.code());
         pause(ui);
       }
     }
@@ -956,106 +1041,123 @@ public final class Main {
 
   private static void menuTagOps(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {
-        "Read EPC", "Read TID", "Write EPC", "Write TID",
-        "Write EPC ID", "Write EPC by TID", "Lock", "Kill", "Back"
+        L("Read EPC", "EPC o'qish", "Читать EPC"),
+        L("Read TID", "TID o'qish", "Читать TID"),
+        L("Write EPC", "EPC yozish", "Записать EPC"),
+        L("Write TID", "TID yozish", "Записать TID"),
+        L("Write EPC ID", "EPC ID yozish", "Записать EPC ID"),
+        L("Write EPC by TID", "TID orqali EPC yozish", "Записать EPC по TID"),
+        L("Lock", "Qulflash", "Блокировка"),
+        L("Kill", "O'chirish", "Уничтожить"),
+        L("Back", "Orqaga", "Назад")
     };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Tag Ops", options, 0);
+      int sel = ui.selectOption(L("Tag Ops", "Tag amallari", "Операции тегов"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 8) return;
       switch (sel) {
         case 0 -> registry.execute(List.of("read-epc",
-            askString(ui, "EPC"),
+            askString(ui, L("EPC", "EPC", "EPC")),
             String.valueOf(selectMem(ui)),
-            String.valueOf(askInt(ui, "WordPtr", 0)),
-            String.valueOf(askInt(ui, "Num", 1)),
-            askString(ui, "Password")), ctx);
+            String.valueOf(askInt(ui, L("WordPtr", "WordPtr", "WordPtr"), 0)),
+            String.valueOf(askInt(ui, L("Num", "Soni", "Кол-во"), 1)),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
         case 1 -> registry.execute(List.of("read-tid",
-            askString(ui, "TID"),
+            askString(ui, L("TID", "TID", "TID")),
             String.valueOf(selectMem(ui)),
-            String.valueOf(askInt(ui, "WordPtr", 0)),
-            String.valueOf(askInt(ui, "Num", 1)),
-            askString(ui, "Password")), ctx);
+            String.valueOf(askInt(ui, L("WordPtr", "WordPtr", "WordPtr"), 0)),
+            String.valueOf(askInt(ui, L("Num", "Soni", "Кол-во"), 1)),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
         case 2 -> registry.execute(List.of("write-epc",
-            askString(ui, "EPC"),
+            askString(ui, L("EPC", "EPC", "EPC")),
             String.valueOf(selectMem(ui)),
-            String.valueOf(askInt(ui, "WordPtr", 0)),
-            askString(ui, "Password"),
-            askString(ui, "Data")), ctx);
+            String.valueOf(askInt(ui, L("WordPtr", "WordPtr", "WordPtr"), 0)),
+            askString(ui, L("Password", "Parol", "Пароль")),
+            askString(ui, L("Data", "Ma'lumot", "Данные"))), ctx);
         case 3 -> registry.execute(List.of("write-tid",
-            askString(ui, "TID"),
+            askString(ui, L("TID", "TID", "TID")),
             String.valueOf(selectMem(ui)),
-            String.valueOf(askInt(ui, "WordPtr", 0)),
-            askString(ui, "Password"),
-            askString(ui, "Data")), ctx);
+            String.valueOf(askInt(ui, L("WordPtr", "WordPtr", "WordPtr"), 0)),
+            askString(ui, L("Password", "Parol", "Пароль")),
+            askString(ui, L("Data", "Ma'lumot", "Данные"))), ctx);
         case 4 -> registry.execute(List.of("write-epc-id",
-            askString(ui, "EPC"),
-            askString(ui, "Password")), ctx);
+            askString(ui, L("EPC", "EPC", "EPC")),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
         case 5 -> registry.execute(List.of("write-epc-by-tid",
-            askString(ui, "TID"),
-            askString(ui, "EPC"),
-            askString(ui, "Password")), ctx);
+            askString(ui, L("TID", "TID", "TID")),
+            askString(ui, L("EPC", "EPC", "EPC")),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
         case 6 -> registry.execute(List.of("lock",
-            askString(ui, "EPC"),
-            String.valueOf(askInt(ui, "Select", 0)),
-            String.valueOf(askInt(ui, "Protect", 0)),
-            askString(ui, "Password")), ctx);
+            askString(ui, L("EPC", "EPC", "EPC")),
+            String.valueOf(askInt(ui, L("Select", "Tanlash", "Выбор"), 0)),
+            String.valueOf(askInt(ui, L("Protect", "Himoya", "Защита"), 0)),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
         case 7 -> registry.execute(List.of("kill",
-            askString(ui, "EPC"),
-            askString(ui, "Password")), ctx);
+            askString(ui, L("EPC", "EPC", "EPC")),
+            askString(ui, L("Password", "Parol", "Пароль"))), ctx);
       }
     }
   }
 
   private static void menuConfig(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     String[] options = {
-        "Tag Output",
-        "Agent URLs",
-        "RF Power",
-        "Write Power",
-        "Per-Antenna Power",
-        "Region",
-        "Beep",
-        "Antenna Check",
-        "Return Loss",
-        "GPIO Get",
-        "GPIO Set",
-        "Relay",
-        "Antenna",
-        "ERP Push",
-        "Back"
+        L("Tag Output", "Tag chiqishi", "Вывод тегов"),
+        L("Agent URLs", "Agent URL", "URL агента"),
+        L("RF Power", "RF quvvat", "RF мощность"),
+        L("Write Power", "Yozish quvvati", "Мощность записи"),
+        L("Per-Antenna Power", "Antenna bo'yicha", "По антеннам"),
+        L("Region", "Mintaqa", "Регион"),
+        L("Beep", "Signal", "Сигнал"),
+        L("Antenna Check", "Antenna tekshiruv", "Проверка антенны"),
+        L("Return Loss", "Qaytish yo'qotish", "Возвратные потери"),
+        L("GPIO Get", "GPIO olish", "GPIO чтение"),
+        L("GPIO Set", "GPIO sozlash", "GPIO запись"),
+        L("Relay", "Rele", "Реле"),
+        L("Antenna", "Antenna", "Антенна"),
+        L("ERP Push", "ERP Push", "ERP Push"),
+        L("Back", "Orqaga", "Назад")
     };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Config/IO", options, 0);
+      int sel = ui.selectOption(L("Config/IO", "Sozlamalar/IO", "Настройки/IO"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 14) return;
       switch (sel) {
         case 0 -> {
-          int mode = ui.selectOption("Tag Output", new String[]{"Counts only", "Show tag lines"}, TAG_OUTPUT.show ? 1 : 0);
+          int mode = ui.selectOption(
+              L("Tag Output", "Tag chiqishi", "Вывод тегов"),
+              new String[]{L("Counts only", "Faqat son", "Только счет"), L("Show tag lines", "Tag satrlarini ko'rsat", "Показать строки тегов")},
+              TAG_OUTPUT.show ? 1 : 0
+          );
           if (mode == ConsoleUi.NAV_BACK) break;
           if (mode == ConsoleUi.NAV_FORWARD) mode = ui.getLastMenuIndex();
           TAG_OUTPUT.show = mode == 1;
-          ui.setStatusMessage(TAG_OUTPUT.show ? "Tag output: ON" : "Tag output: OFF");
+          ui.setStatusMessage(TAG_OUTPUT.show
+              ? L("Tag output: ON", "Tag chiqishi: Yoqildi", "Вывод тегов: Вкл")
+              : L("Tag output: OFF", "Tag chiqishi: O'chirildi", "Вывод тегов: Выкл"));
         }
         case 1 -> {
           int port = parseInt(System.getenv("RFID_AGENT_PORT"), 0);
           if (port <= 0) {
-            ui.showLines("Agent URLs", List.of("Agent HTTP is disabled.", "Set RFID_AGENT_PORT to enable."));
+            ui.showLines(L("Agent URLs", "Agent URL", "URL агента"),
+                List.of(L("Agent HTTP is disabled.", "Agent HTTP o'chirilgan.", "Agent HTTP отключен."),
+                    L("Set RFID_AGENT_PORT to enable.", "RFID_AGENT_PORT ni sozlang.", "Задайте RFID_AGENT_PORT.")));
             break;
           }
           List<String> urls = listAgentUrls(port);
           if (urls.isEmpty()) {
-            ui.showLines("Agent URLs", List.of("No LAN IP found.", "Use: http://127.0.0.1:" + port));
+            ui.showLines(L("Agent URLs", "Agent URL", "URL агента"),
+                List.of(L("No LAN IP found.", "LAN IP topilmadi.", "LAN IP не найден."),
+                    L("Use: http://127.0.0.1:" + port, "Foydalaning: http://127.0.0.1:" + port, "Используйте: http://127.0.0.1:" + port)));
           } else {
-            ui.showLines("Agent URLs", urls);
+            ui.showLines(L("Agent URLs", "Agent URL", "URL агента"), urls);
           }
         }
         case 2 -> {
-          int p = selectPowerValue(ui, "RF Power", 30);
+          int p = selectPowerValue(ui, L("RF Power", "RF quvvat", "RF мощность"), 30);
           if (p == ConsoleUi.NAV_BACK) return;
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
@@ -1070,7 +1172,8 @@ public final class Main {
               String.valueOf(region.minFreq())), ctx);
         }
         case 6 -> {
-          int b = ui.selectOption("Beep", new String[]{"On (1)", "Off (0)"}, 0);
+          int b = ui.selectOption(L("Beep", "Signal", "Сигнал"),
+              new String[]{L("On (1)", "Yoqilgan (1)", "Вкл (1)"), L("Off (0)", "O'chirilgan (0)", "Выкл (0)")}, 0);
           if (b == ConsoleUi.NAV_BACK) return;
           if (b == ConsoleUi.NAV_FORWARD) b = ui.getLastMenuIndex();
           int val = b == 0 ? 1 : 0;
@@ -1079,81 +1182,94 @@ public final class Main {
         case 7 -> menuAntennaCheck(ui, ctx);
         case 8 -> menuReturnLoss(ui, ctx);
         case 9 -> registry.execute(List.of("gpio", "get"), ctx);
-        case 10 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, "GPIO mask", 0))), ctx);
-        case 11 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, "Relay value", 0))), ctx);
+        case 10 -> registry.execute(List.of("gpio", "set", String.valueOf(askInt(ui, L("GPIO mask", "GPIO maska", "GPIO маска"), 0))), ctx);
+        case 11 -> registry.execute(List.of("relay", String.valueOf(askInt(ui, L("Relay value", "Rele qiymati", "Значение реле"), 0))), ctx);
         case 12 -> registry.execute(List.of("antenna",
-            String.valueOf(askInt(ui, "Arg1", 0)),
-            String.valueOf(askInt(ui, "Arg2", 0))), ctx);
+            String.valueOf(askInt(ui, L("Arg1", "Arg1", "Arg1"), 0)),
+            String.valueOf(askInt(ui, L("Arg2", "Arg2", "Arg2"), 0))), ctx);
         case 13 -> menuErp(ui, ctx);
       }
     }
   }
 
   private static void menuErp(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Status", "Enable", "Disable", "Set URL", "Test (fake)", "Set batch (ms)", "Back"};
+    String[] options = {
+        L("Status", "Holat", "Статус"),
+        L("Enable", "Yoqish", "Включить"),
+        L("Disable", "O'chirish", "Выключить"),
+        L("Set URL", "URL sozlash", "URL"),
+        L("Test (fake)", "Test (soxta)", "Тест (fake)"),
+        L("Set batch (ms)", "Batch (ms)", "Batch (мс)"),
+        L("Back", "Orqaga", "Назад")
+    };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("ERP Push", options, 0);
+      int sel = ui.selectOption(L("ERP Push", "ERP Push", "ERP Push"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 6) return;
       ErpConfig cfg = copyErpConfig(ctx.erp().config());
       switch (sel) {
-        case 0 -> ui.showLines("ERP Status", List.of(
-            "enabled=" + cfg.enabled,
-            "url=" + safe(cfg.baseUrl),
-            "endpoint=" + safe(cfg.endpoint),
-            "device=" + safe(cfg.device),
-            "auth=" + (cfg.auth == null || cfg.auth.isBlank() ? "(empty)" : "***"),
-            "secret=" + (cfg.secret == null || cfg.secret.isBlank() ? "(empty)" : "***")
+        case 0 -> ui.showLines(L("ERP Status", "ERP holati", "Статус ERP"), List.of(
+            L("enabled", "yoqilgan", "включено") + "=" + cfg.enabled,
+            L("url", "url", "url") + "=" + safe(cfg.baseUrl),
+            L("endpoint", "endpoint", "endpoint") + "=" + safe(cfg.endpoint),
+            L("device", "qurilma", "устройство") + "=" + safe(cfg.device),
+            L("auth", "auth", "auth") + "=" + (cfg.auth == null || cfg.auth.isBlank() ? L("(empty)", "(bo'sh)", "(пусто)") : "***"),
+            L("secret", "secret", "secret") + "=" + (cfg.secret == null || cfg.secret.isBlank() ? L("(empty)", "(bo'sh)", "(пусто)") : "***")
         ));
         case 1 -> {
           cfg.enabled = true;
           saveErpConfig(ctx.erp(), cfg);
-          ui.setStatusMessage("ERP push enabled.");
+          ui.setStatusMessage(L("ERP push enabled.", "ERP push yoqildi.", "ERP push включен."));
         }
         case 2 -> {
           cfg.enabled = false;
           saveErpConfig(ctx.erp(), cfg);
-          ui.setStatusMessage("ERP push disabled.");
+          ui.setStatusMessage(L("ERP push disabled.", "ERP push o'chirildi.", "ERP push выключен."));
         }
         case 3 -> {
           String url;
           while (true) {
-            url = askStringOrBack(ui, "ERP URL", safe(cfg.baseUrl));
+            url = askStringOrBack(ui, L("ERP URL", "ERP URL", "ERP URL"), safe(cfg.baseUrl));
             if (url == null) break;
             if (!url.isBlank()) break;
-            ui.setStatusMessage("ERP URL required.");
+            ui.setStatusMessage(L("ERP URL required.", "ERP URL kerak.", "Требуется ERP URL."));
           }
           if (url == null) break;
-          String token = askStringOrBack(ui, "ERP Token (api_key:api_secret)", safe(cfg.auth));
+          String token = askStringOrBack(ui, L("ERP Token (api_key:api_secret)", "ERP Token (api_key:api_secret)", "ERP Token (api_key:api_secret)"), safe(cfg.auth));
           if (token == null) break;
           cfg.baseUrl = url;
           cfg.auth = token;
           saveErpConfig(ctx.erp(), cfg);
           final boolean[] ok = {false};
-          ui.runWithSpinner("Checking ERP", () -> ok[0] = ctx.erp().testOnce());
+          ui.runWithSpinner(L("Checking ERP", "ERP tekshirish", "Проверка ERP"), () -> ok[0] = ctx.erp().testOnce());
           if (ok[0]) {
-            ui.setStatusMessage("ERP check: ok");
+            ui.setStatusMessage(L("ERP check: ok", "ERP tekshiruv: ok", "ERP проверка: ok"));
           } else {
             String msg = ctx.erp().lastErrMsg();
-            ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP check: failed" : "ERP check: failed (" + msg + ")");
+            ui.setStatusMessage(msg == null || msg.isBlank()
+                ? L("ERP check: failed", "ERP tekshiruv: xato", "ERP проверка: ошибка")
+                : L("ERP check: failed (", "ERP tekshiruv: xato (", "ERP проверка: ошибка (") + msg + ")");
           }
         }
         case 4 -> {
-          int count = askInt(ui, "Fake tags count", 5);
+          int count = askInt(ui, L("Fake tags count", "Fake tag soni", "Кол-во fake тегов"), 5);
           final boolean[] ok = {false};
-          ui.runWithSpinner("Sending test tags", () -> ok[0] = ctx.erp().pushTestTags(count));
+          ui.runWithSpinner(L("Sending test tags", "Test taglar yuborilmoqda", "Отправка тестовых тегов"),
+              () -> ok[0] = ctx.erp().pushTestTags(count));
           if (ok[0]) {
-            ui.setStatusMessage("ERP test tags: sent");
+            ui.setStatusMessage(L("ERP test tags: sent", "ERP test taglar: yuborildi", "ERP тестовые теги: отправлено"));
           } else {
             String msg = ctx.erp().lastErrMsg();
-            ui.setStatusMessage(msg == null || msg.isBlank() ? "ERP test tags: failed" : "ERP test tags: failed (" + msg + ")");
+            ui.setStatusMessage(msg == null || msg.isBlank()
+                ? L("ERP test tags: failed", "ERP test taglar: xato", "ERP тестовые теги: ошибка")
+                : L("ERP test tags: failed (", "ERP test taglar: xato (", "ERP тестовые теги: ошибка (") + msg + ")");
           }
         }
         case 5 -> {
           String[] items = {
-              "Instant (0 ms)",
+              L("Instant (0 ms)", "Darhol (0 ms)", "Сразу (0 мс)"),
               "10 ms",
               "20 ms",
               "50 ms",
@@ -1177,7 +1293,7 @@ public final class Main {
             case 1000 -> 9;
             default -> 4;
           };
-          int choice = ui.selectOption("Batch ms", items, defIdx);
+          int choice = ui.selectOption(L("Batch ms", "Batch ms", "Batch мс"), items, defIdx);
           if (choice == ConsoleUi.NAV_BACK) break;
           if (choice == ConsoleUi.NAV_FORWARD) choice = ui.getLastMenuIndex();
           int ms = switch (choice) {
@@ -1195,45 +1311,52 @@ public final class Main {
           };
           cfg.batchMs = ms;
           saveErpConfig(ctx.erp(), cfg);
-          ui.setStatusMessage("Batch ms set: " + ms);
+          ui.setStatusMessage(L("Batch ms set: ", "Batch ms o'rnatildi: ", "Batch мс установлено: ") + ms);
         }
       }
     }
   }
 
   private static void menuAntennaPower(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Set all", "Set per-antenna", "Get", "Back"};
+    String[] options = {
+        L("Set all", "Hammasini sozlash", "Установить все"),
+        L("Set per-antenna", "Har antennani alohida", "По антеннам"),
+        L("Get", "Ko'rish", "Получить"),
+        L("Back", "Orqaga", "Назад")
+    };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Per-Antenna Power", options, 0);
+      int sel = ui.selectOption(L("Per-Antenna Power", "Antenna bo'yicha quvvat", "Мощность по антеннам"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 3) return;
       if (!ctx.reader().isConnected()) {
-        ui.setStatusMessage("Not connected.");
+        ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
         continue;
       }
       int count = ctx.reader().getAntennaCount();
       if (sel == 2) {
         AntennaPowerInfo info = ctx.reader().getRfPowerByAnt(count);
         if (!info.result().ok()) {
-          ui.setStatusMessage("GetRfPowerByAnt failed: " + info.result().code());
+          ui.setStatusMessage(L("GetRfPowerByAnt failed: ", "GetRfPowerByAnt xato: ", "GetRfPowerByAnt ошибка: ") + info.result().code());
           continue;
         }
         String[] lines = new String[info.powers().length];
         for (int i = 0; i < info.powers().length; i++) {
-          lines[i] = "Ant " + (i + 1) + ": " + info.powers()[i] + " dBm";
+          lines[i] = L("Ant", "Ant", "Ант") + " " + (i + 1) + ": " + info.powers()[i] + " dBm";
         }
-        ui.showLines("Per-Antenna Power", List.of(lines));
+        ui.showLines(L("Per-Antenna Power", "Antenna bo'yicha quvvat", "Мощность по антеннам"), List.of(lines));
         continue;
       }
       if (sel == 0) {
-        int p = selectPowerValue(ui, "Set all power", 30);
+        int p = selectPowerValue(ui, L("Set all power", "Hammasi quvvati", "Установить мощность"), 30);
         if (p == ConsoleUi.NAV_BACK) continue;
         int[] powers = new int[count];
         for (int i = 0; i < count; i++) powers[i] = p;
         Result r = ctx.reader().setRfPowerByAnt(powers);
-        ui.setStatusMessage(r.ok() ? "Per-antenna power set." : "SetRfPowerByAnt failed: " + r.code());
+        ui.setStatusMessage(r.ok()
+            ? L("Per-antenna power set.", "Antenna quvvati sozlandi.", "Мощность по антеннам установлена.")
+            : L("SetRfPowerByAnt failed: ", "SetRfPowerByAnt xato: ", "SetRfPowerByAnt ошибка: ") + r.code());
         continue;
       }
       int[] powers = new int[count];
@@ -1245,7 +1368,7 @@ public final class Main {
       }
       boolean cancelled = false;
       for (int i = 0; i < count; i++) {
-        int p = selectPowerValue(ui, "Ant " + (i + 1) + " Power", powers[i]);
+        int p = selectPowerValue(ui, L("Ant ", "Ant ", "Ант ") + (i + 1) + L(" Power", " quvvati", " мощность"), powers[i]);
         if (p == ConsoleUi.NAV_BACK) {
           cancelled = true;
           break;
@@ -1254,38 +1377,47 @@ public final class Main {
       }
       if (cancelled) continue;
       Result r = ctx.reader().setRfPowerByAnt(powers);
-      ui.setStatusMessage(r.ok() ? "Per-antenna power set." : "SetRfPowerByAnt failed: " + r.code());
+      ui.setStatusMessage(r.ok()
+          ? L("Per-antenna power set.", "Antenna quvvati sozlandi.", "Мощность по антеннам установлена.")
+          : L("SetRfPowerByAnt failed: ", "SetRfPowerByAnt xato: ", "SetRfPowerByAnt ошибка: ") + r.code());
     }
   }
 
   private static void menuAntennaCheck(ConsoleUi ui, CommandContext ctx) {
-    String[] options = {"Enable (1)", "Disable (0)", "Back"};
+    String[] options = {
+        L("Enable (1)", "Yoqish (1)", "Вкл (1)"),
+        L("Disable (0)", "O'chirish (0)", "Выкл (0)"),
+        L("Back", "Orqaga", "Назад")
+    };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Antenna Check", options, 0);
+      int sel = ui.selectOption(L("Antenna Check", "Antenna tekshiruv", "Проверка антенны"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
       if (!ctx.reader().isConnected()) {
-        ui.setStatusMessage("Not connected.");
+        ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
         continue;
       }
       boolean enabled = sel == 0;
       Result r = ctx.reader().setCheckAnt(enabled);
-      ui.setStatusMessage(r.ok() ? "Antenna check " + (enabled ? "enabled" : "disabled") + "."
-          : "SetCheckAnt failed: " + r.code());
+      ui.setStatusMessage(r.ok()
+          ? L("Antenna check ", "Antenna tekshiruv ", "Проверка антенны ")
+          + (enabled ? L("enabled", "yoqildi", "включена") : L("disabled", "o'chirildi", "выключена")) + "."
+          : L("SetCheckAnt failed: ", "SetCheckAnt xato: ", "SetCheckAnt ошибка: ") + r.code());
     }
   }
 
   private static void menuReturnLoss(ConsoleUi ui, CommandContext ctx) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Return Loss", new String[]{"Measure", "Back"}, 0);
+      int sel = ui.selectOption(L("Return Loss", "Qaytish yo'qotish", "Возвратные потери"),
+          new String[]{L("Measure", "O'lchash", "Измерить"), L("Back", "Orqaga", "Назад")}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 1) return;
       if (!ctx.reader().isConnected()) {
-        ui.setStatusMessage("Not connected.");
+        ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
         continue;
       }
       int ant = selectAntennaIndex(ui, ctx.reader().getAntennaCount(), 0);
@@ -1295,27 +1427,32 @@ public final class Main {
       int freqKhz = (int) Math.round(freqMHz * 1000.0);
       ReturnLossInfo info = ctx.reader().measureReturnLoss(ant, freqKhz);
       if (!info.result().ok()) {
-        ui.setStatusMessage("MeasureReturnLoss failed: " + info.result().code());
+        ui.setStatusMessage(L("MeasureReturnLoss failed: ", "MeasureReturnLoss xato: ", "MeasureReturnLoss ошибка: ") + info.result().code());
       } else {
-        ui.showLines("Return Loss", List.of(
-            "Antenna: " + (ant + 1) + " (" + ant + ")",
-            "Freq: " + formatMHz(freqMHz),
-            "Loss: " + info.lossDb() + " dB"
+        ui.showLines(L("Return Loss", "Qaytish yo'qotish", "Возвратные потери"), List.of(
+            L("Antenna: ", "Antenna: ", "Антенна: ") + (ant + 1) + " (" + ant + ")",
+            L("Freq: ", "Chastota: ", "Частота: ") + formatMHz(freqMHz),
+            L("Loss: ", "Yo'qotish: ", "Потери: ") + info.lossDb() + " dB"
         ));
       }
     }
   }
 
   private static void menuWritePower(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
-    String[] options = {"Set (normal)", "Set (high)", "Get", "Back"};
+    String[] options = {
+        L("Set (normal)", "Sozlash (oddiy)", "Установить (норм)"),
+        L("Set (high)", "Sozlash (yuqori)", "Установить (высок)"),
+        L("Get", "Ko'rish", "Получить"),
+        L("Back", "Orqaga", "Назад")
+    };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Write Power", options, 0);
+      int sel = ui.selectOption(L("Write Power", "Yozish quvvati", "Мощность записи"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 3) return;
       if (!ctx.reader().isConnected()) {
-        ui.setStatusMessage("Not connected.");
+        ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
         continue;
       }
       if (sel == 2) {
@@ -1325,7 +1462,7 @@ public final class Main {
       int def = 30;
       WritePowerInfo info = ctx.reader().getWritePower();
       if (info.result().ok()) def = info.power();
-      int p = selectPowerValue(ui, "Write Power", def);
+      int p = selectPowerValue(ui, L("Write Power", "Yozish quvvati", "Мощность записи"), def);
       if (p == ConsoleUi.NAV_BACK) continue;
       registry.execute(List.of("wpower", "set", String.valueOf(p), sel == 1 ? "1" : "0"), ctx);
     }
@@ -1334,7 +1471,8 @@ public final class Main {
   private static void menuInfo(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Info", new String[]{"Reader info", "Serial", "Back"}, 0);
+      int sel = ui.selectOption(L("Info", "Ma'lumot", "Инфо"),
+          new String[]{L("Reader info", "Reader ma'lumoti", "Инфо ридера"), L("Serial", "Seriya raqam", "Серийный"), L("Back", "Orqaga", "Назад")}, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
       if (sel == 2) return;
@@ -1344,7 +1482,9 @@ public final class Main {
   }
 
   private static ShellExit commandShell(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
-    ui.println("Command shell. Type 'menu' to return.");
+    ui.println(L("Command shell. Type 'menu' to return.",
+        "Buyruq oynasi. Qaytish uchun 'menu' yozing.",
+        "Командная строка. Для возврата введите 'menu'."));
     while (true) {
       ui.prompt();
       String line = ui.readLine();
@@ -1359,7 +1499,9 @@ public final class Main {
         continue;
       }
       if (!registry.execute(tokens, ctx)) {
-        ui.println("Unknown command. Type 'help'.");
+        ui.println(L("Unknown command. Type 'help'.",
+            "Noma'lum buyruq. 'help' yozing.",
+            "Неизвестная команда. Введите 'help'."));
       }
     }
   }
@@ -1389,13 +1531,13 @@ public final class Main {
 
   private static List<Integer> choosePorts(ConsoleUi ui) {
     String[] options = {
-        "auto (default)",
-        "auto+ (wide)",
-        "27011 only",
-        "27011 + 2022",
-        "2022 only"
+        L("auto (default)", "auto (standart)", "auto (по умолчанию)"),
+        L("auto+ (wide)", "auto+ (keng)", "auto+ (широко)"),
+        L("27011 only", "faqat 27011", "только 27011"),
+        L("27011 + 2022", "27011 + 2022", "27011 + 2022"),
+        L("2022 only", "faqat 2022", "только 2022")
     };
-    int mode = ui.selectOption("Ports", options, 0);
+    int mode = ui.selectOption(L("Ports", "Portlar", "Порты"), options, 0);
     if (mode == ConsoleUi.NAV_BACK) return null;
     if (mode == ConsoleUi.NAV_FORWARD) mode = ui.getLastMenuIndex();
     return switch (mode) {
@@ -1409,15 +1551,15 @@ public final class Main {
 
   private static PrefixChoice chooseSubnetPrefix(ConsoleUi ui, List<String> prefixes) {
     if (prefixes == null || prefixes.isEmpty()) {
-      ui.setStatusMessage("No LAN prefixes found.");
+      ui.setStatusMessage(L("No LAN prefixes found.", "LAN prefikslar topilmadi.", "LAN префиксы не найдены."));
       return new PrefixChoice(null, true);
     }
     String[] options = new String[prefixes.size() + 1];
-    options[0] = "Auto (all detected)";
+    options[0] = L("Auto (all detected)", "Auto (hammasi)", "Авто (все найденные)");
     for (int i = 0; i < prefixes.size(); i++) {
       options[i + 1] = prefixes.get(i);
     }
-    int sel = ui.selectOption("Subnet", options, 0);
+    int sel = ui.selectOption(L("Subnet", "Subnet", "Подсеть"), options, 0);
     if (sel == ConsoleUi.NAV_BACK) return new PrefixChoice(null, true);
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     if (sel <= 0) return new PrefixChoice(null, false);
@@ -1425,7 +1567,8 @@ public final class Main {
   }
 
   private static int selectMem(ConsoleUi ui) {
-    int mode = ui.selectOption("Mem", new String[]{"Password(0)", "EPC(1)", "TID(2)", "User(3)"}, 1);
+    int mode = ui.selectOption(L("Mem", "Xotira", "Память"),
+        new String[]{L("Password(0)", "Parol(0)", "Пароль(0)"), "EPC(1)", "TID(2)", L("User(3)", "Foydalanuvchi(3)", "Пользователь(3)")}, 1);
     return switch (mode) {
       case 0 -> 0;
       case 2 -> 2;
@@ -1438,8 +1581,8 @@ public final class Main {
     RegionOption[] options = regionOptions();
     String[] labels = new String[options.length + 1];
     for (int i = 0; i < options.length; i++) labels[i] = options[i].label();
-    labels[labels.length - 1] = "Custom";
-    int sel = ui.selectOption("Region", labels, 0);
+    labels[labels.length - 1] = L("Custom", "Maxsus", "Пользовательский");
+    int sel = ui.selectOption(L("Region", "Mintaqa", "Регион"), labels, 0);
     if (sel == ConsoleUi.NAV_BACK) return null;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     if (sel >= 0 && sel < options.length) {
@@ -1449,34 +1592,34 @@ public final class Main {
       for (int i = 0; i < freqs.length; i++) {
         items[i] = i + ": " + formatMHz(freqs[i]);
       }
-      int minIdx = ui.selectOptionPaged("MinFreq", items, 0, 12);
+      int minIdx = ui.selectOptionPaged(L("MinFreq", "Min chastota", "Мин частота"), items, 0, 12);
       if (minIdx == ConsoleUi.NAV_BACK) return null;
       if (minIdx == ConsoleUi.NAV_FORWARD) minIdx = ui.getLastMenuIndex();
       if (minIdx < 0) minIdx = 0;
       String[] maxItems = new String[items.length + 1];
-      maxItems[0] = "Same as Min (" + minIdx + ")";
+      maxItems[0] = L("Same as Min (", "Min bilan bir xil (", "Так же как Min (") + minIdx + ")";
       System.arraycopy(items, 0, maxItems, 1, items.length);
-      int maxSel = ui.selectOptionPaged("MaxFreq", maxItems, minIdx + 1, 12);
+      int maxSel = ui.selectOptionPaged(L("MaxFreq", "Max chastota", "Макс частота"), maxItems, minIdx + 1, 12);
       if (maxSel == ConsoleUi.NAV_BACK) return null;
       if (maxSel == ConsoleUi.NAV_FORWARD) maxSel = ui.getLastMenuIndex();
       int maxIdx = maxSel <= 0 ? minIdx : maxSel - 1;
       return new RegionSelection(opt.band(), maxIdx, minIdx);
     }
-    int band = askInt(ui, "Band", 0);
-    int max = askInt(ui, "MaxFreq", 0);
-    int min = askInt(ui, "MinFreq", 0);
+    int band = askInt(ui, L("Band", "Band", "Диапазон"), 0);
+    int max = askInt(ui, L("MaxFreq", "Max chastota", "Макс частота"), 0);
+    int min = askInt(ui, L("MinFreq", "Min chastota", "Мин частота"), 0);
     return new RegionSelection(band, max, min);
   }
 
   private static RegionOption[] regionOptions() {
     return new RegionOption[] {
-        new RegionOption("Chinese band1", 8, 840.125, 0.25, 20),
-        new RegionOption("US band", 2, 902.75, 0.5, 50),
-        new RegionOption("Korean band", 3, 917.1, 0.2, 32),
-        new RegionOption("EU band", 4, 865.1, 0.2, 15),
-        new RegionOption("Chinese band2", 1, 920.125, 0.25, 20),
-        new RegionOption("US band3", 12, 902.0, 0.5, 53),
-        new RegionOption("ALL band", 0, 840.0, 2.0, 61)
+        new RegionOption(L("Chinese band1", "Xitoy band1", "Китай band1"), 8, 840.125, 0.25, 20),
+        new RegionOption(L("US band", "AQSH band", "США band"), 2, 902.75, 0.5, 50),
+        new RegionOption(L("Korean band", "Koreya band", "Корея band"), 3, 917.1, 0.2, 32),
+        new RegionOption(L("EU band", "Yevropa band", "Европа band"), 4, 865.1, 0.2, 15),
+        new RegionOption(L("Chinese band2", "Xitoy band2", "Китай band2"), 1, 920.125, 0.25, 20),
+        new RegionOption(L("US band3", "AQSH band3", "США band3"), 12, 902.0, 0.5, 53),
+        new RegionOption(L("ALL band", "HAMMA band", "ВСЕ band"), 0, 840.0, 2.0, 61)
     };
   }
 
@@ -1514,19 +1657,20 @@ public final class Main {
 
   private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current) {
     int addrDefault = current.address() == 255 ? 0 : 1;
-    int addrSel = ui.selectOption("Address", new String[]{"Broadcast (255)", "Custom"}, addrDefault);
-    int address = addrSel == 0 ? 255 : askInt(ui, "Address (0-255)", current.address());
-    int session = askInt(ui, "Session", current.session());
-    int q = askInt(ui, "QValue", current.qValue());
-    int scanTime = askInt(ui, "ScanTime", current.scanTime());
-    int antenna = askInt(ui, "Antenna", current.antenna());
-    int readType = askInt(ui, "ReadType", current.readType());
-    int readMem = askInt(ui, "ReadMem", current.readMem());
-    int readPtr = askInt(ui, "ReadPtr", current.readPtr());
-    int readLen = askInt(ui, "ReadLength", current.readLength());
-    int tidPtr = askInt(ui, "TID Ptr", current.tidPtr());
-    int tidLen = askInt(ui, "TID Len", current.tidLen());
-    String pwd = askString(ui, "Password", current.password() == null ? "" : current.password());
+    int addrSel = ui.selectOption(L("Address", "Manzil", "Адрес"),
+        new String[]{L("Broadcast (255)", "Broadcast (255)", "Broadcast (255)"), L("Custom", "Maxsus", "Пользовательский")}, addrDefault);
+    int address = addrSel == 0 ? 255 : askInt(ui, L("Address (0-255)", "Manzil (0-255)", "Адрес (0-255)"), current.address());
+    int session = askInt(ui, L("Session", "Session", "Сессия"), current.session());
+    int q = askInt(ui, L("QValue", "Q qiymat", "Q значение"), current.qValue());
+    int scanTime = askInt(ui, L("ScanTime", "Skan vaqti", "Время скана"), current.scanTime());
+    int antenna = askInt(ui, L("Antenna", "Antenna", "Антенна"), current.antenna());
+    int readType = askInt(ui, L("ReadType", "O'qish turi", "Тип чтения"), current.readType());
+    int readMem = askInt(ui, L("ReadMem", "O'qish xotirasi", "Память чтения"), current.readMem());
+    int readPtr = askInt(ui, L("ReadPtr", "O'qish manzili", "Адрес чтения"), current.readPtr());
+    int readLen = askInt(ui, L("ReadLength", "O'qish uzunligi", "Длина чтения"), current.readLength());
+    int tidPtr = askInt(ui, L("TID Ptr", "TID manzili", "TID адрес"), current.tidPtr());
+    int tidLen = askInt(ui, L("TID Len", "TID uzunligi", "TID длина"), current.tidLen());
+    String pwd = askString(ui, L("Password", "Parol", "Пароль"), current.password() == null ? "" : current.password());
     return new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
         readType, readMem, readPtr, readLen, pwd);
   }
@@ -1534,23 +1678,27 @@ public final class Main {
   private static void printInventoryParams(ConsoleUi ui, InventoryParams p) {
     if (!p.result().ok()) {
       if (p.result().code() == 0x36) {
-        ui.showLines("Not connected", List.of("Please connect first."));
+        ui.showLines(L("Not connected", "Ulanmagan", "Не подключено"),
+            List.of(L("Please connect first.", "Avval ulang.", "Сначала подключитесь.")));
       } else {
-        ui.showLines("GetInventoryParameter failed", List.of("code=" + p.result().code()));
+        ui.showLines(L("GetInventoryParameter failed", "GetInventoryParameter xato", "GetInventoryParameter ошибка"),
+            List.of("code=" + p.result().code()));
       }
       return;
     }
-    ui.showLines("Inventory Params", List.of(
-        "address=" + p.address() + " session=" + p.session() + " q=" + p.qValue() + " scanTime=" + p.scanTime()
-            + " antenna=" + p.antenna(),
-        "readType=" + p.readType() + " readMem=" + p.readMem() + " readPtr=" + p.readPtr()
-            + " readLen=" + p.readLength(),
-        "tidPtr=" + p.tidPtr() + " tidLen=" + p.tidLen() + " password=" + p.password()
+    ui.showLines(L("Inventory Params", "Inventar parametrlari", "Параметры инвентаря"), List.of(
+        L("address", "manzil", "адрес") + "=" + p.address() + " " + L("session", "session", "сессия") + "=" + p.session()
+            + " q=" + p.qValue() + " " + L("scanTime", "scanTime", "scanTime") + "=" + p.scanTime()
+            + " " + L("antenna", "antenna", "антенна") + "=" + p.antenna(),
+        L("readType", "readType", "readType") + "=" + p.readType() + " " + L("readMem", "readMem", "readMem")
+            + "=" + p.readMem() + " " + L("readPtr", "readPtr", "readPtr") + "=" + p.readPtr()
+            + " " + L("readLen", "readLen", "readLen") + "=" + p.readLength(),
+        "tidPtr=" + p.tidPtr() + " tidLen=" + p.tidLen() + " " + L("password", "parol", "пароль") + "=" + p.password()
     ));
   }
 
   private static void pause(ConsoleUi ui) {
-    ui.readLineInMenu("Press Enter to continue...");
+    ui.readLineInMenu(L("Press Enter to continue...", "Davom etish uchun Enter bosing...", "Нажмите Enter чтобы продолжить..."));
   }
 
   private record PrefixChoice(String prefix, boolean cancelled) {
@@ -1558,7 +1706,7 @@ public final class Main {
 
   private static int selectReaderType(ConsoleUi ui, int def) {
     int idx = def == 16 ? 1 : 0;
-    int sel = ui.selectOption("ReaderType", new String[]{"4", "16"}, idx);
+    int sel = ui.selectOption(L("ReaderType", "Reader turi", "Тип ридера"), new String[]{"4", "16"}, idx);
     if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     return sel == 1 ? 16 : 4;
@@ -1566,7 +1714,8 @@ public final class Main {
 
   private static int selectLog(ConsoleUi ui, int def) {
     int idx = def == 1 ? 1 : 0;
-    int sel = ui.selectOption("Log", new String[]{"0 (off)", "1 (on)"}, idx);
+    int sel = ui.selectOption(L("Log", "Log", "Лог"),
+        new String[]{L("0 (off)", "0 (o‘chiq)", "0 (выкл)"), L("1 (on)", "1 (yoqiq)", "1 (вкл)")}, idx);
     if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     return sel == 1 ? 1 : 0;
@@ -1576,9 +1725,9 @@ public final class Main {
     int n = count > 0 ? count : 4;
     String[] items = new String[n];
     for (int i = 0; i < n; i++) {
-      items[i] = "Ant " + (i + 1) + " (" + i + ")";
+      items[i] = L("Ant", "Ant", "Ант") + " " + (i + 1) + " (" + i + ")";
     }
-    int sel = ui.selectOptionPaged("Antenna", items, Math.max(0, Math.min(def, n - 1)), 10);
+    int sel = ui.selectOptionPaged(L("Antenna", "Antenna", "Антенна"), items, Math.max(0, Math.min(def, n - 1)), 10);
     if (sel == ConsoleUi.NAV_BACK) return ConsoleUi.NAV_BACK;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     return sel;
@@ -1588,8 +1737,8 @@ public final class Main {
     RegionOption[] options = regionOptions();
     String[] labels = new String[options.length + 1];
     for (int i = 0; i < options.length; i++) labels[i] = options[i].label();
-    labels[labels.length - 1] = "Custom (MHz)";
-    int sel = ui.selectOption("Return Loss Freq", labels, 0);
+    labels[labels.length - 1] = L("Custom (MHz)", "Maxsus (MHz)", "Пользовательский (MHz)");
+    int sel = ui.selectOption(L("Return Loss Freq", "Qaytish yo'qotish chastotasi", "Частота потерь"), labels, 0);
     if (sel == ConsoleUi.NAV_BACK) return null;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     if (sel >= 0 && sel < options.length) {
@@ -1599,16 +1748,16 @@ public final class Main {
       for (int i = 0; i < freqs.length; i++) {
         items[i] = i + ": " + formatMHz(freqs[i]);
       }
-      int idx = ui.selectOptionPaged("Frequency", items, freqs.length / 2, 12);
+      int idx = ui.selectOptionPaged(L("Frequency", "Chastota", "Частота"), items, freqs.length / 2, 12);
       if (idx == ConsoleUi.NAV_BACK) return null;
       if (idx == ConsoleUi.NAV_FORWARD) idx = ui.getLastMenuIndex();
       if (idx < 0) idx = 0;
       return freqs[idx];
     }
-    String line = ui.readLineInMenu("Freq MHz (e.g. 915.25): ");
+    String line = ui.readLineInMenu(L("Freq MHz (e.g. 915.25): ", "Chastota MHz (masalan 915.25): ", "Частота MHz (например 915.25): "));
     double freq = parseDouble(line, -1);
     if (freq <= 0) {
-      ui.setStatusMessage("Invalid frequency.");
+      ui.setStatusMessage(L("Invalid frequency.", "Chastota noto'g'ri.", "Неверная частота."));
       return null;
     }
     return freq;
@@ -1636,7 +1785,9 @@ public final class Main {
   }
 
   private static void updateStatus(ConsoleUi ui, ReaderClient reader, ErpPusher erp) {
-    String readerState = reader.isConnected() ? "UHF: connected" : "UHF: disconnected";
+    String readerState = reader.isConnected()
+        ? L("UHF: connected", "UHF: ulangan", "UHF: подключено")
+        : L("UHF: disconnected", "UHF: uzilgan", "UHF: отключено");
     String erpState = erpStatus(erp, ERP_AGENT);
     ui.setHeaderRight(erpState.isEmpty() ? readerState : readerState + " | " + erpState);
     ui.setStatusBase(TAG_STATS.statusLine());
@@ -1775,21 +1926,23 @@ public final class Main {
 
   private static String erpStatus(ErpPusher erp, ErpAgentRegistrar agent) {
     if (erp == null) return "";
-    if (erp.config() == null || erp.config().baseUrl == null || erp.config().baseUrl.isBlank()) return "ERP: inactive";
+    if (erp.config() == null || erp.config().baseUrl == null || erp.config().baseUrl.isBlank()) {
+      return L("ERP: inactive", "ERP: o‘chiq", "ERP: неактивно");
+    }
     long now = System.currentTimeMillis();
     long ok = erp.lastOkAt();
     long err = erp.lastErrAt();
     long aok = agent == null ? 0 : agent.lastOkAt();
     long aerr = agent == null ? 0 : agent.lastErrAt();
-    if (aok > 0 && now - aok <= 60000) return "ERP: online";
-    if (aerr > aok && now - aerr <= 60000) return "ERP: agent-error";
-    if (ok > 0 && err <= ok && now - ok <= 60000) return "ERP: active";
-    if (!erp.isEnabled()) return "ERP: configured";
-    if (err > ok) return "ERP: error";
-    if (ok == 0) return "ERP: waiting";
+    if (aok > 0 && now - aok <= 60000) return L("ERP: online", "ERP: online", "ERP: онлайн");
+    if (aerr > aok && now - aerr <= 60000) return L("ERP: agent-error", "ERP: agent xato", "ERP: ошибка агента");
+    if (ok > 0 && err <= ok && now - ok <= 60000) return L("ERP: active", "ERP: faol", "ERP: активен");
+    if (!erp.isEnabled()) return L("ERP: configured", "ERP: sozlangan", "ERP: настроено");
+    if (err > ok) return L("ERP: error", "ERP: xato", "ERP: ошибка");
+    if (ok == 0) return L("ERP: waiting", "ERP: kutilmoqda", "ERP: ожидание");
     long age = now - ok;
-    if (age <= 60000) return "ERP: connected";
-    return "ERP: stale";
+    if (age <= 60000) return L("ERP: connected", "ERP: ulangan", "ERP: подключено");
+    return L("ERP: stale", "ERP: eskirgan", "ERP: устарело");
   }
 
   private enum ShellExit {
