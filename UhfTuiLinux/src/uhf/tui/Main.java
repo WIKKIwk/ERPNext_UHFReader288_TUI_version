@@ -3,12 +3,14 @@ package uhf.tui;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import uhf.core.AntennaPowerInfo;
 import uhf.core.GpioStatus;
 import uhf.core.InventoryParams;
@@ -90,6 +92,7 @@ public final class Main {
         ctx.ui().println("Connect failed: " + r.code());
         return;
       }
+      rememberConnection(ip, port, readerType, log);
       ctx.ui().println("Connected: " + ip + "@" + port + " (readerType=" + readerType + ")");
     });
 
@@ -757,6 +760,18 @@ public final class Main {
     int readerType = 4;
     int log = 0;
     List<Integer> ports = List.of(27011, 2022);
+    LastConnection last = loadLastConnection();
+    if (last != null) {
+      readerType = last.readerType;
+      log = last.log;
+      if (isPortOpen(last.host, last.port, 150)) {
+        Result r = ctx.reader().connect(last.host, last.port, readerType, log, tag -> handleTag(ctx, tag), () -> {});
+        if (r.ok()) {
+          ui.setStatusMessage("Auto-connect: " + last.host + "@" + last.port);
+          return;
+        }
+      }
+    }
     List<String> prefixes = NetworkScanner.detectPrefixes();
     List<String> usbPrefixes = NetworkScanner.detectUsbPrefixes();
     List<String> all = new ArrayList<>();
@@ -773,7 +788,7 @@ public final class Main {
       for (String pfx : all) {
         for (int p : ports) {
           NetworkScanner.HostPort hp = NetworkScanner.findReader(
-              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(200)
+              List.of(pfx), List.of(p), readerType, log, Duration.ofMillis(120)
           );
           if (hp != null) {
             found[0] = hp;
@@ -789,6 +804,7 @@ public final class Main {
     NetworkScanner.HostPort hp = found[0];
     Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
     if (r.ok()) {
+      rememberConnection(hp.host(), hp.port(), readerType, log);
       ui.setStatusMessage("Auto-connect: " + hp.host() + "@" + hp.port());
     } else {
       ui.setStatusMessage("Auto-connect failed: " + r.code());
@@ -880,6 +896,7 @@ public final class Main {
           if (hp != null) {
             Result r = ctx.reader().connect(hp.host(), hp.port(), readerType, log, tag -> handleTag(ctx, tag), () -> {});
             if (r.ok()) {
+              rememberConnection(hp.host(), hp.port(), readerType, log);
               ui.println("Connected: " + hp.host() + "@" + hp.port());
               connected = true;
               break;
@@ -1587,6 +1604,57 @@ public final class Main {
     } catch (Exception ignored) {
     }
     return out;
+  }
+
+  private static boolean isPortOpen(String host, int port, int timeoutMs) {
+    if (host == null || host.isBlank() || port <= 0) return false;
+    try (Socket s = new Socket()) {
+      s.connect(new java.net.InetSocketAddress(host, port), Math.max(50, timeoutMs));
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private static void rememberConnection(String host, int port, int readerType, int log) {
+    if (host == null || host.isBlank()) return;
+    Properties p = new Properties();
+    p.setProperty("host", host);
+    p.setProperty("port", String.valueOf(port));
+    p.setProperty("readerType", String.valueOf(readerType));
+    p.setProperty("log", String.valueOf(log));
+    try {
+      Path file = lastConnectionPath();
+      Files.createDirectories(file.getParent());
+      try (var out = Files.newOutputStream(file)) {
+        p.store(out, "Last connection");
+      }
+    } catch (Exception ignored) {
+    }
+  }
+
+  private static LastConnection loadLastConnection() {
+    Path file = lastConnectionPath();
+    if (!Files.exists(file)) return null;
+    Properties p = new Properties();
+    try (var in = Files.newInputStream(file)) {
+      p.load(in);
+      String host = p.getProperty("host", "").trim();
+      int port = parseInt(p.getProperty("port"), 0);
+      int readerType = parseInt(p.getProperty("readerType"), 4);
+      int log = parseInt(p.getProperty("log"), 0);
+      if (host.isBlank() || port <= 0) return null;
+      return new LastConnection(host, port, readerType, log);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static Path lastConnectionPath() {
+    return Path.of("UhfTuiLinux", "last_connection.properties");
+  }
+
+  private record LastConnection(String host, int port, int readerType, int log) {
   }
 
   private static String erpStatus(ErpPusher erp, ErpAgentRegistrar agent) {

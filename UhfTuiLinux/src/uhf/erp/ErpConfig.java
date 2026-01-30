@@ -23,7 +23,7 @@ public final class ErpConfig {
   public String agentEndpoint = DEFAULT_AGENT_ENDPOINT;
   public String agentId = "";
   public int agentIntervalMs = 10000;
-  public int batchMs = 250;
+  public int batchMs = 100;
   public int maxBatch = 200;
   public int maxQueue = 5000;
   public int heartbeatMs = 3000;

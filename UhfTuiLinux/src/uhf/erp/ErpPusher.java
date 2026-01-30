@@ -12,6 +12,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ErpPusher {
   private final ConcurrentLinkedQueue<ErpTagEvent> queue = new ConcurrentLinkedQueue<>();
@@ -24,6 +25,8 @@ public final class ErpPusher {
   private volatile long lastOkAt = 0;
   private volatile long lastErrAt = 0;
   private volatile String lastErrMsg = "";
+  private final AtomicBoolean flushing = new AtomicBoolean(false);
+  private volatile long lastFlushAt = 0;
 
   public ErpPusher(ErpConfig cfg) {
     this.cfg = cfg == null ? new ErpConfig() : cfg;
@@ -129,6 +132,7 @@ public final class ErpPusher {
     if (!enabled()) return;
     queue.add(evt);
     trimQueue();
+    triggerFlushAsync();
   }
 
   public void shutdown() {
@@ -186,9 +190,12 @@ public final class ErpPusher {
   }
 
   private void safeFlush() {
+    if (!flushing.compareAndSet(false, true)) return;
     try {
       flushOnce();
     } catch (Exception ignored) {
+    } finally {
+      flushing.set(false);
     }
   }
 
@@ -234,6 +241,8 @@ public final class ErpPusher {
       }
       trimQueue();
       throw e;
+    } finally {
+      lastFlushAt = System.currentTimeMillis();
     }
   }
 
@@ -243,6 +252,16 @@ public final class ErpPusher {
     lastOkAt = System.currentTimeMillis();
     lastErrAt = 0;
     lastErrMsg = "";
+  }
+
+  private void triggerFlushAsync() {
+    if (!enabled()) return;
+    long now = System.currentTimeMillis();
+    int max = Math.max(1, cfg.maxBatch);
+    int size = queue.size();
+    if (size >= max || cfg.batchMs <= 0 || now - lastFlushAt >= cfg.batchMs) {
+      scheduler.execute(this::safeFlush);
+    }
   }
 
   private void postTags(List<ErpTagEvent> tags, boolean heartbeat) throws Exception {
