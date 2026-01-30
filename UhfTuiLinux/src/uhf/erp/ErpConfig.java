@@ -12,6 +12,7 @@ import java.util.Properties;
 
 public final class ErpConfig {
   private static final String DEFAULT_ENDPOINT = "/api/method/rfidenter.rfidenter.api.ingest_tags";
+  private static final String DEFAULT_AGENT_ENDPOINT = "/api/method/rfidenter.rfidenter.api.register_agent";
 
   public boolean enabled = false;
   public String baseUrl = "";
@@ -19,6 +20,9 @@ public final class ErpConfig {
   public String secret = "";
   public String device = defaultDevice();
   public String endpoint = DEFAULT_ENDPOINT;
+  public String agentEndpoint = DEFAULT_AGENT_ENDPOINT;
+  public String agentId = "";
+  public int agentIntervalMs = 10000;
   public int batchMs = 250;
   public int maxBatch = 200;
   public int maxQueue = 5000;
@@ -36,10 +40,13 @@ public final class ErpConfig {
       cfg.secret = p.getProperty("secret", cfg.secret).trim();
       cfg.device = p.getProperty("device", cfg.device).trim();
       cfg.endpoint = p.getProperty("endpoint", cfg.endpoint).trim();
+      cfg.agentEndpoint = p.getProperty("agentEndpoint", cfg.agentEndpoint).trim();
+      cfg.agentId = p.getProperty("agentId", cfg.agentId).trim();
       cfg.batchMs = parseInt(p.getProperty("batchMs"), cfg.batchMs);
       cfg.maxBatch = parseInt(p.getProperty("maxBatch"), cfg.maxBatch);
       cfg.maxQueue = parseInt(p.getProperty("maxQueue"), cfg.maxQueue);
       cfg.heartbeatMs = parseInt(p.getProperty("heartbeatMs"), cfg.heartbeatMs);
+      cfg.agentIntervalMs = parseInt(p.getProperty("agentIntervalMs"), cfg.agentIntervalMs);
     } catch (IOException ignored) {
     }
     return cfg;
@@ -54,10 +61,13 @@ public final class ErpConfig {
     p.setProperty("secret", safe(secret));
     p.setProperty("device", safe(device));
     p.setProperty("endpoint", safe(endpoint));
+    p.setProperty("agentEndpoint", safe(agentEndpoint));
+    p.setProperty("agentId", safe(agentId));
     p.setProperty("batchMs", String.valueOf(batchMs));
     p.setProperty("maxBatch", String.valueOf(maxBatch));
     p.setProperty("maxQueue", String.valueOf(maxQueue));
     p.setProperty("heartbeatMs", String.valueOf(heartbeatMs));
+    p.setProperty("agentIntervalMs", String.valueOf(agentIntervalMs));
     try {
       Files.createDirectories(file.getParent());
       try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(file))) {

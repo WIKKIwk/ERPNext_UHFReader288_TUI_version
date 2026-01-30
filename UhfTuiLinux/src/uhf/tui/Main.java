@@ -17,6 +17,7 @@ import uhf.core.Result;
 import uhf.core.ReturnLossInfo;
 import uhf.core.TagRead;
 import uhf.core.WritePowerInfo;
+import uhf.erp.ErpAgentRegistrar;
 import uhf.erp.ErpConfig;
 import uhf.erp.ErpPusher;
 import uhf.erp.ErpTagEvent;
@@ -25,6 +26,7 @@ import uhf.sdk.ReaderClient;
 public final class Main {
   private static final TagStats TAG_STATS = new TagStats();
   private static final TagOutput TAG_OUTPUT = new TagOutput();
+  private static ErpAgentRegistrar ERP_AGENT;
 
   public static void main(String[] args) {
     ConsoleUi ui = new ConsoleUi();
@@ -36,6 +38,7 @@ public final class Main {
     AgentServer agent = new AgentServer(agentPort,
         () -> new AgentServer.Status(reader.isConnected(), TAG_STATS.total(), TAG_STATS.rate()));
     boolean agentOk = agent.start();
+    ERP_AGENT = new ErpAgentRegistrar(erp.config(), () -> listAgentUrls(agentPort));
 
     ui.println("UhfTuiLinux - Linux TUI for UHFReader288/ST-8504/E710");
     ui.println("Menu mode. Use ↑/↓ + Enter.");
@@ -57,6 +60,7 @@ public final class Main {
       menuLoop(ui, reader, erp, registry);
     } finally {
       agent.stop();
+      if (ERP_AGENT != null) ERP_AGENT.shutdown();
       erp.shutdown();
       reader.disconnect();
     }
@@ -1552,7 +1556,7 @@ public final class Main {
 
   private static void updateStatus(ConsoleUi ui, ReaderClient reader, ErpPusher erp) {
     String readerState = reader.isConnected() ? "UHF: connected" : "UHF: disconnected";
-    String erpState = erpStatus(erp);
+    String erpState = erpStatus(erp, ERP_AGENT);
     ui.setHeaderRight(erpState.isEmpty() ? readerState : readerState + " | " + erpState);
     ui.setStatusBase(TAG_STATS.statusLine());
   }
@@ -1576,12 +1580,16 @@ public final class Main {
     return out;
   }
 
-  private static String erpStatus(ErpPusher erp) {
+  private static String erpStatus(ErpPusher erp, ErpAgentRegistrar agent) {
     if (erp == null) return "";
     if (erp.config() == null || erp.config().baseUrl == null || erp.config().baseUrl.isBlank()) return "ERP: inactive";
     long now = System.currentTimeMillis();
     long ok = erp.lastOkAt();
     long err = erp.lastErrAt();
+    long aok = agent == null ? 0 : agent.lastOkAt();
+    long aerr = agent == null ? 0 : agent.lastErrAt();
+    if (aok > 0 && now - aok <= 60000) return "ERP: online";
+    if (aerr > aok && now - aerr <= 60000) return "ERP: agent-error";
     if (ok > 0 && err <= ok && now - ok <= 60000) return "ERP: active";
     if (!erp.isEnabled()) return "ERP: configured";
     if (err > ok) return "ERP: error";
@@ -1671,6 +1679,7 @@ public final class Main {
     if (erp == null || cfg == null) return;
     cfg.save(erpConfigPath());
     erp.applyConfig(cfg);
+    if (ERP_AGENT != null) ERP_AGENT.applyConfig(cfg);
   }
 
   private static ErpConfig copyErpConfig(ErpConfig src) {
