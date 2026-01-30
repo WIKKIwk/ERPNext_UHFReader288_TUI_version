@@ -29,12 +29,14 @@ public final class Main {
   private static final TagStats TAG_STATS = new TagStats();
   private static final TagOutput TAG_OUTPUT = new TagOutput();
   private static ErpAgentRegistrar ERP_AGENT;
+  private static Lang LANG = Lang.EN;
 
   public static void main(String[] args) {
     ConsoleUi ui = new ConsoleUi();
     ReaderClient reader = new ReaderClient();
     ErpPusher erp = new ErpPusher(loadErpConfig());
     CommandRegistry registry = new CommandRegistry();
+    LANG = loadLang();
     int agentPort = parseInt(System.getenv("RFID_AGENT_PORT"), 0);
     boolean agentEnabled = agentPort > 0;
     List<String> agentUrls = agentEnabled ? listAgentUrls(agentPort) : List.of();
@@ -689,8 +691,16 @@ public final class Main {
       updateStatus(ui, reader, erp);
       String status = reader.isConnected() ? "connected" : "disconnected";
       int sel = ui.selectOption(
-          "Main [" + status + "]",
-          new String[]{"Connection", "Scan", "Inventory", "Tag Ops", "Settings", "Command shell", "Quit"},
+          L("Main", "Asosiy", "Главная") + " [" + status + "]",
+          new String[]{
+              L("Connection", "Ulanish", "Подключение"),
+              L("Scan", "Skanner", "Скан"),
+              L("Inventory", "Inventar", "Инвентарь"),
+              L("Tag Ops", "Tag amallari", "Операции тегов"),
+              L("Settings", "Sozlamalar", "Настройки"),
+              L("Command shell", "Buyruqlar", "Команды"),
+              L("Quit", "Chiqish", "Выход")
+          },
           0
       );
       if (sel == ConsoleUi.NAV_BACK) {
@@ -747,18 +757,26 @@ public final class Main {
   }
 
   private static void menuSettings(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
-    String[] options = {"Reader settings", "ERP Push", "Info", "About", "Back"};
+    String[] options = {
+        L("Reader settings", "Reader sozlamalari", "Настройки ридера"),
+        L("ERP Push", "ERP Push", "ERP Push"),
+        L("Language", "Til", "Язык"),
+        L("Info", "Ma'lumot", "Инфо"),
+        L("About", "Haqida", "О программе"),
+        L("Back", "Orqaga", "Назад")
+    };
     while (true) {
       updateStatus(ui, ctx.reader(), ctx.erp());
-      int sel = ui.selectOption("Settings", options, 0);
+      int sel = ui.selectOption(L("Settings", "Sozlamalar", "Настройки"), options, 0);
       if (sel == ConsoleUi.NAV_BACK) return;
       if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
-      if (sel == 4) return;
+      if (sel == 5) return;
       switch (sel) {
         case 0 -> menuConfig(ui, ctx, registry);
         case 1 -> menuErp(ui, ctx);
-        case 2 -> menuInfo(ui, ctx, registry);
-        case 3 -> menuAbout(ui);
+        case 2 -> menuLanguage(ui);
+        case 3 -> menuInfo(ui, ctx, registry);
+        case 4 -> menuAbout(ui);
       }
     }
   }
@@ -879,6 +897,25 @@ public final class Main {
         case 2 -> attemptAutoConnect(ui, ctx);
       }
     }
+  }
+
+  private static void menuLanguage(ConsoleUi ui) {
+    Lang[] options = {Lang.UZ, Lang.EN, Lang.RU};
+    String[] labels = {options[0].label, options[1].label, options[2].label};
+    int def = 0;
+    for (int i = 0; i < options.length; i++) {
+      if (options[i] == LANG) {
+        def = i;
+        break;
+      }
+    }
+    int sel = ui.selectOption(L("Language", "Til", "Язык"), labels, def);
+    if (sel == ConsoleUi.NAV_BACK) return;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel < 0 || sel >= options.length) return;
+    LANG = options[sel];
+    saveLang(LANG);
+    ui.setStatusMessage(L("Language set", "Til o'rnatildi", "Язык установлен") + ": " + LANG.label);
   }
 
   private static void menuInventory(ConsoleUi ui, CommandContext ctx, CommandRegistry registry) {
@@ -1675,6 +1712,67 @@ public final class Main {
   private record LastConnection(String host, int port, int readerType, int log) {
   }
 
+  private static Lang loadLang() {
+    Path file = uiConfigPath();
+    if (!Files.exists(file)) return Lang.EN;
+    Properties p = new Properties();
+    try (var in = Files.newInputStream(file)) {
+      p.load(in);
+      String code = p.getProperty("lang", "en").trim();
+      return Lang.from(code);
+    } catch (Exception e) {
+      return Lang.EN;
+    }
+  }
+
+  private static void saveLang(Lang lang) {
+    try {
+      Path file = uiConfigPath();
+      Files.createDirectories(file.getParent());
+      Properties p = new Properties();
+      p.setProperty("lang", lang.code);
+      try (var out = Files.newOutputStream(file)) {
+        p.store(out, "UI Config");
+      }
+    } catch (Exception ignored) {
+    }
+  }
+
+  private static Path uiConfigPath() {
+    return Path.of("UhfTuiLinux", "ui.properties");
+  }
+
+  private static String L(String en, String uz, String ru) {
+    return switch (LANG) {
+      case UZ -> uz;
+      case RU -> ru;
+      default -> en;
+    };
+  }
+
+  private enum Lang {
+    EN("en", "English"),
+    UZ("uz", "O‘zbek"),
+    RU("ru", "Русский");
+
+    final String code;
+    final String label;
+
+    Lang(String code, String label) {
+      this.code = code;
+      this.label = label;
+    }
+
+    static Lang from(String code) {
+      if (code == null) return EN;
+      String c = code.trim().toLowerCase();
+      for (Lang l : values()) {
+        if (l.code.equals(c)) return l;
+      }
+      return EN;
+    }
+  }
+
   private static String erpStatus(ErpPusher erp, ErpAgentRegistrar agent) {
     if (erp == null) return "";
     if (erp.config() == null || erp.config().baseUrl == null || erp.config().baseUrl.isBlank()) return "ERP: inactive";
@@ -1726,7 +1824,7 @@ public final class Main {
     }
 
     synchronized String statusLine() {
-      return "Tags: " + total + " | Rate: " + rate + "/s";
+      return L("Tags", "Taglar", "Теги") + ": " + total + " | " + L("Rate", "Tezlik", "Скорость") + ": " + rate + "/s";
     }
 
     synchronized long total() {
