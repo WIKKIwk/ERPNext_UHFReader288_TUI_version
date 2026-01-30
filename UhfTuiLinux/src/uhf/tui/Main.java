@@ -1164,22 +1164,10 @@ public final class Main {
           if (selProfile == 3) break;
           Double meters = selectDistanceMeters(ui, selProfile);
           if (meters == null) break;
-          double base = switch (selProfile) {
-            case 0 -> 12.0;
-            case 2 -> 16.0;
-            default -> 14.0;
-          };
-          double slope = switch (selProfile) {
-            case 0 -> 2.0;
-            case 2 -> 1.2;
-            default -> 1.5;
-          };
-          int power = (int) Math.round(base + slope * meters);
-          if (power < 10) power = 10;
-          if (power > 33) power = 33;
+          int power = estimatePowerForProfile(selProfile, meters);
           if (!ctx.reader().isConnected()) {
             ui.setStatusMessage(L("Not connected. Suggested power: ", "Ulanmagan. Tavsiya quvvat: ", "Не подключено. Реком. мощность: ")
-                + power + " dBm");
+                + power + " dBm (" + meters + " m)");
             break;
           }
           Result r = ctx.reader().setPower(power);
@@ -1560,40 +1548,70 @@ public final class Main {
   }
 
   private static Double selectDistanceMeters(ConsoleUi ui, int profileIdx) {
-    String[] options = {
-        "1 m",
-        "2 m",
-        "3 m",
-        "5 m",
-        "7 m",
-        "10 m",
-        "15 m",
-        "20 m",
-        "30 m",
-        "40 m",
-        "50 m",
-        L("Custom", "Maxsus", "Пользовательский"),
-        L("Back", "Orqaga", "Назад")
-    };
-    int def = switch (profileIdx) {
-      case 0 -> 1;
-      case 2 -> 5;
-      default -> 3;
-    };
+    double[] distances = profileDistances(profileIdx);
+    String[] options = new String[distances.length + 2];
+    for (int i = 0; i < distances.length; i++) {
+      options[i] = formatDistance(distances[i]);
+    }
+    options[options.length - 2] = L("Custom", "Maxsus", "Пользовательский");
+    options[options.length - 1] = L("Back", "Orqaga", "Назад");
+    int def = Math.min(distances.length - 1, distances.length / 2);
     int sel = ui.selectOption(L("Distance (m)", "Masofa (m)", "Дистанция (м)"), options, def);
     if (sel == ConsoleUi.NAV_BACK) return null;
     if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
     if (sel == options.length - 1) return null;
     if (sel == options.length - 2) {
-      Double m = askDoubleOrBack(ui, L("Distance (m)", "Masofa (m)", "Дистанция (м)"), 5.0);
+      Double m = askDoubleOrBack(ui, L("Distance (m)", "Masofa (m)", "Дистанция (м)"), distances[def]);
       if (m == null) return null;
-      if (m < 0.1) m = 0.1;
-      if (m > 50) m = 50.0;
+      double min = distances[0];
+      double max = distances[distances.length - 1];
+      if (m < min) m = min;
+      if (m > max) m = max;
       return m;
     }
-    double[] vals = {1,2,3,5,7,10,15,20,30,40,50};
-    if (sel < 0 || sel >= vals.length) return 5.0;
-    return vals[sel];
+    if (sel < 0 || sel >= distances.length) return distances[def];
+    return distances[sel];
+  }
+
+  private static int estimatePowerForProfile(int profileIdx, double meters) {
+    double[] d = profileDistances(profileIdx);
+    int[] p = profilePowers(profileIdx);
+    if (meters <= d[0]) return p[0];
+    if (meters >= d[d.length - 1]) return p[p.length - 1];
+    for (int i = 1; i < d.length; i++) {
+      if (meters <= d[i]) {
+        double t = (meters - d[i - 1]) / (d[i] - d[i - 1]);
+        double val = p[i - 1] + t * (p[i] - p[i - 1]);
+        int power = (int) Math.round(val);
+        if (power < 5) power = 5;
+        if (power > 33) power = 33;
+        return power;
+      }
+    }
+    return p[p.length - 1];
+  }
+
+  private static double[] profileDistances(int profileIdx) {
+    return switch (profileIdx) {
+      case 0 -> new double[]{0.5, 1, 2, 3, 5, 7, 10};
+      case 2 -> new double[]{2, 3, 5, 7, 10, 15, 20, 25, 30};
+      default -> new double[]{1, 2, 3, 5, 7, 10, 12, 15};
+    };
+  }
+
+  private static int[] profilePowers(int profileIdx) {
+    return switch (profileIdx) {
+      case 0 -> new int[]{8, 10, 12, 14, 16, 18, 20};
+      case 2 -> new int[]{14, 16, 19, 22, 26, 29, 31, 32, 33};
+      default -> new int[]{10, 12, 14, 17, 19, 22, 24, 26};
+    };
+  }
+
+  private static String formatDistance(double meters) {
+    if (Math.abs(meters - Math.round(meters)) < 0.01) {
+      return (int) Math.round(meters) + " m";
+    }
+    return meters + " m";
   }
 
   private static String askString(ConsoleUi ui, String label) {
