@@ -1152,10 +1152,6 @@ public final class Main {
           registry.execute(List.of("power", String.valueOf(p)), ctx);
         }
         case 3 -> {
-          if (!ctx.reader().isConnected()) {
-            ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
-            break;
-          }
           String[] profiles = {
               L("Short range", "Qisqa masofa", "Короткая дистанция"),
               L("Balanced", "Muvozanat", "Сбалансировано"),
@@ -1166,6 +1162,10 @@ public final class Main {
           if (selProfile == ConsoleUi.NAV_BACK) break;
           if (selProfile == ConsoleUi.NAV_FORWARD) selProfile = ui.getLastMenuIndex();
           if (selProfile == 3) break;
+          if (!ctx.reader().isConnected()) {
+            ui.setStatusMessage(L("Not connected.", "Ulanmagan.", "Не подключено."));
+            break;
+          }
           int power = switch (selProfile) {
             case 0 -> 15;
             case 2 -> 30;
