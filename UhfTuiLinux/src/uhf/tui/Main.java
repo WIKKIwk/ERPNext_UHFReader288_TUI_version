@@ -641,7 +641,26 @@ public final class Main {
       }
       String sub = args.get(1).toLowerCase();
       if (sub.equals("start")) {
+        if (!ctx.reader().isConnected()) {
+          ctx.ui().println(L("Not connected.", "Ulanmagan.", "Не подключено."));
+          return;
+        }
+
+        // Many vendor firmwares expect inventory antenna values like 0x80.. (Ant1..),
+        // while users often enter 1..N or 0..N-1. Normalize to reduce "255" errors.
+        ensureInventoryAntennaNormalized(ctx);
+
         Result r = ctx.reader().startInventory();
+        if (!r.ok() && r.code() == 255) {
+          // Auto-try each antenna port to find one that can start inventory.
+          Result rr = tryStartInventoryOnAnyAntenna(ctx);
+          if (rr.ok()) {
+            ctx.ui().println(L("Inventory started.", "Inventar boshlandi.", "Инвентарь запущен."));
+            return;
+          }
+          r = rr;
+        }
+
         ctx.ui().println(r.ok()
             ? L("Inventory started.", "Inventar boshlandi.", "Инвентарь запущен.")
             : L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + r.code());
@@ -660,10 +679,27 @@ public final class Main {
     registry.register("inv-once", "inv-once [ms]", (args, ctx) -> {
       int ms = args.size() >= 2 ? parseInt(args.get(1), 1000) : 1000;
       if (ms < 50) ms = 50;
+      if (!ctx.reader().isConnected()) {
+        ctx.ui().println(L("Not connected.", "Ulanmagan.", "Не подключено."));
+        return;
+      }
+
+      ensureInventoryAntennaNormalized(ctx);
+
       Result r = ctx.reader().startInventory();
       if (!r.ok()) {
-        ctx.ui().println(L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + r.code());
-        return;
+        if (r.code() == 255) {
+          Result rr = tryStartInventoryOnAnyAntenna(ctx);
+          if (rr.ok()) {
+            r = rr;
+          } else {
+            ctx.ui().println(L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + rr.code());
+            return;
+          }
+        } else {
+          ctx.ui().println(L("StartRead failed: ", "StartRead xato: ", "StartRead ошибка: ") + r.code());
+          return;
+        }
       }
       ctx.ui().println(L("Scanning for ", "Skan qilinmoqda ", "Сканирование ") + ms + " ms ...");
       try {
@@ -705,7 +741,7 @@ public final class Main {
               int readLen = parseInt(args.get(8), current.readLength());
               int tidPtr = parseInt(args.get(9), current.tidPtr());
               int tidLen = parseInt(args.get(10), current.tidLen());
-              int antenna = parseInt(args.get(11), current.antenna());
+              int antenna = normalizeInventoryAntenna(parseInt(args.get(11), current.antenna()), ctx.reader().getAntennaCount());
               String password = args.get(12);
               int address = args.size() >= 14 ? parseInt(args.get(13), current.address()) : current.address();
               InventoryParams p = new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
@@ -716,7 +752,7 @@ public final class Main {
                   : L("SetInventoryParameter failed: ", "SetInventoryParameter xato: ", "SetInventoryParameter ошибка: ") + r.code());
               return;
             }
-            InventoryParams p = promptInventoryParams(ctx.ui(), current);
+            InventoryParams p = promptInventoryParams(ctx.ui(), current, ctx.reader().getAntennaCount());
             Result r = ctx.reader().setInventoryParams(p);
             ctx.ui().println(r.ok()
                 ? L("Inventory params updated.", "Inventar parametrlari yangilandi.", "Параметры обновлены.")
@@ -1019,7 +1055,7 @@ public final class Main {
           continue;
         }
         InventoryParams current = ctx.reader().getInventoryParams();
-        InventoryParams p = promptInventoryParams(ui, current);
+        InventoryParams p = promptInventoryParams(ui, current, ctx.reader().getAntennaCount());
         Result r = ctx.reader().setInventoryParams(p);
         ui.println(r.ok() ? L("Inventory params updated.", "Inventar parametrlari yangilandi.", "Параметры обновлены.")
             : L("SetInventoryParameter failed: ", "SetInventoryParameter xatosi: ", "Ошибка SetInventoryParameter: ") + r.code());
@@ -1744,7 +1780,7 @@ public final class Main {
     }
   }
 
-  private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current) {
+  private static InventoryParams promptInventoryParams(ConsoleUi ui, InventoryParams current, int antennaCount) {
     int addrDefault = current.address() == 255 ? 0 : 1;
     int addrSel = ui.selectOption(L("Address", "Manzil", "Адрес"),
         new String[]{L("Broadcast (255)", "Broadcast (255)", "Broadcast (255)"), L("Custom", "Maxsus", "Пользовательский")}, addrDefault);
@@ -1752,7 +1788,7 @@ public final class Main {
     int session = askInt(ui, L("Session", "Session", "Сессия"), current.session());
     int q = askInt(ui, L("QValue", "Q qiymat", "Q значение"), current.qValue());
     int scanTime = askInt(ui, L("ScanTime", "Skan vaqti", "Время скана"), current.scanTime());
-    int antenna = askInt(ui, L("Antenna", "Antenna", "Антенна"), current.antenna());
+    int antenna = selectInventoryAntenna(ui, antennaCount, current.antenna());
     int readType = askInt(ui, L("ReadType", "O'qish turi", "Тип чтения"), current.readType());
     int readMem = askInt(ui, L("ReadMem", "O'qish xotirasi", "Память чтения"), current.readMem());
     int readPtr = askInt(ui, L("ReadPtr", "O'qish manzili", "Адрес чтения"), current.readPtr());
@@ -1762,6 +1798,87 @@ public final class Main {
     String pwd = askString(ui, L("Password", "Parol", "Пароль"), current.password() == null ? "" : current.password());
     return new InventoryParams(Result.success(), address, tidPtr, tidLen, session, q, scanTime, antenna,
         readType, readMem, readPtr, readLen, pwd);
+  }
+
+  private static int selectInventoryAntenna(ConsoleUi ui, int antennaCount, int currentAntenna) {
+    int n = antennaCount > 0 ? antennaCount : 4;
+    int normalized = normalizeInventoryAntenna(currentAntenna, n);
+    int def = 0;
+    if (normalized >= 0x80 && normalized < 0x80 + n) {
+      def = normalized - 0x80;
+    } else if (normalized >= 1 && normalized <= n) {
+      def = normalized - 1;
+    } else if (normalized >= 0 && normalized < n) {
+      def = normalized;
+    }
+    String[] items = new String[n + 1];
+    for (int i = 0; i < n; i++) {
+      items[i] = L("Ant", "Ant", "Ант") + " " + (i + 1) + " (" + (0x80 + i) + ")";
+    }
+    items[n] = L("Custom (raw)", "Maxsus (son)", "Пользовательский (число)");
+    int sel = ui.selectOption(L("Inventory antenna", "Inventar antenna", "Антенна инвентаря"), items, Math.max(0, Math.min(def, n - 1)));
+    if (sel == ConsoleUi.NAV_BACK) return currentAntenna;
+    if (sel == ConsoleUi.NAV_FORWARD) sel = ui.getLastMenuIndex();
+    if (sel >= 0 && sel < n) return 0x80 + sel;
+    int raw = askInt(ui, L("Antenna (raw)", "Antenna (son)", "Антенна (число)"), currentAntenna);
+    return normalizeInventoryAntenna(raw, n);
+  }
+
+  private static int normalizeInventoryAntenna(int antenna, int antennaCount) {
+    int n = antennaCount > 0 ? antennaCount : 4;
+    // Already in vendor format (Ant1..AntN => 0x80..)
+    if (antenna >= 0x80 && antenna < 0x80 + n) return antenna;
+    // Accept 1..N (human) and map to 0x80..
+    if (antenna >= 1 && antenna <= n) return 0x80 + (antenna - 1);
+    // Accept 0..N-1 (zero-based) and map to 0x80..
+    if (antenna >= 0 && antenna < n) return 0x80 + antenna;
+    return antenna;
+  }
+
+  private static void ensureInventoryAntennaNormalized(CommandContext ctx) {
+    try {
+      InventoryParams cur = ctx.reader().getInventoryParams();
+      if (!cur.result().ok()) return;
+      int n = ctx.reader().getAntennaCount();
+      int normalized = normalizeInventoryAntenna(cur.antenna(), n);
+      if (normalized == cur.antenna()) return;
+      InventoryParams fixed = new InventoryParams(Result.success(), cur.address(), cur.tidPtr(), cur.tidLen(), cur.session(), cur.qValue(),
+          cur.scanTime(), normalized, cur.readType(), cur.readMem(), cur.readPtr(), cur.readLength(), cur.password());
+      Result r = ctx.reader().setInventoryParams(fixed);
+      if (r.ok()) {
+        ctx.ui().setStatusMessage(L("Inventory antenna normalized: ", "Inventar antenna moslandi: ", "Антенна нормализована: ") + normalized);
+      }
+    } catch (Throwable ignored) {
+    }
+  }
+
+  private static Result tryStartInventoryOnAnyAntenna(CommandContext ctx) {
+    InventoryParams cur = ctx.reader().getInventoryParams();
+    if (!cur.result().ok()) return Result.fail(cur.result().code());
+    int n = ctx.reader().getAntennaCount();
+    int original = cur.antenna();
+    int originalNorm = normalizeInventoryAntenna(original, n);
+
+    // Try each antenna port in vendor-expected encoding.
+    for (int i = 0; i < Math.max(1, n); i++) {
+      int ant = 0x80 + i;
+      if (ant == originalNorm) continue;
+      InventoryParams p = new InventoryParams(Result.success(), cur.address(), cur.tidPtr(), cur.tidLen(), cur.session(), cur.qValue(),
+          cur.scanTime(), ant, cur.readType(), cur.readMem(), cur.readPtr(), cur.readLength(), cur.password());
+      Result set = ctx.reader().setInventoryParams(p);
+      if (!set.ok()) continue;
+      Result start = ctx.reader().startInventory();
+      if (start.ok()) {
+        ctx.ui().setStatusMessage(L("Inventory antenna auto-selected: ", "Inventar antenna avto-tanlandi: ", "Антенна выбрана: ") + ant);
+        return start;
+      }
+    }
+
+    // Restore original antenna (best-effort) if we tried others.
+    InventoryParams restore = new InventoryParams(Result.success(), cur.address(), cur.tidPtr(), cur.tidLen(), cur.session(), cur.qValue(),
+        cur.scanTime(), originalNorm, cur.readType(), cur.readMem(), cur.readPtr(), cur.readLength(), cur.password());
+    try { ctx.reader().setInventoryParams(restore); } catch (Throwable ignored) {}
+    return Result.fail(255);
   }
 
   private static void printInventoryParams(ConsoleUi ui, InventoryParams p) {
